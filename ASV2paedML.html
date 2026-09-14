@@ -1,0 +1,2531 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASV2paedML</title>
+<style>
+  :root{
+    --paper: #FAFAF8;
+    --ink: #1B1D1B;
+    --muted: #7C8178;
+    --line: #DEDDD4;
+    --accent: #2B6157;
+    --accent-soft: #E4EFEC;
+    --danger: #A6402F;
+    --danger-soft: #F7E9E6;
+    --warn: #96660C;
+    --warn-soft: #FBF0D9;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .warn-banner{
+    display:none;
+    background: var(--warn-soft);
+    border:1px solid #E9D8B0;
+    border-radius:8px;
+    padding:10px 14px;
+    color: var(--warn);
+    font-weight:600;
+  }
+
+  *{ box-sizing: border-box; }
+
+  body{
+    margin:0;
+    font-family: var(--sans);
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 48px 24px 80px;
+  }
+
+  .wrap{ max-width: 1120px; margin: 0 auto; }
+
+  header{ margin-bottom: 32px; }
+  h1{ font-size: 28px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 6px; }
+  header p{ margin: 0; color: var(--muted); font-size: 15px; }
+
+  /* Dropzone */
+  #dropzone{
+    border: 1.5px dashed var(--line);
+    border-radius: 10px;
+    padding: 56px 24px;
+    text-align: center;
+    background: #fff;
+    transition: border-color 0.15s ease, background 0.15s ease;
+    cursor: pointer;
+  }
+  #dropzone.drag{ border-color: var(--accent); background: var(--accent-soft); }
+  #dropzone .icon{ width: 40px; height: 40px; margin: 0 auto 16px; stroke: var(--muted); }
+  #dropzone.drag .icon{ stroke: var(--accent); }
+  #dropzone p{ margin: 0 0 4px; font-size: 16px; }
+  #dropzone .sub{ color: var(--muted); font-size: 14px; }
+  #dropzone .browse{ color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+  input[type="file"]{ display: none; }
+
+  #status{ margin-top: 14px; font-size: 14px; min-height: 18px; }
+  #status.error{ color: var(--danger); }
+  #status.ok{ color: var(--accent); }
+
+  /* Results */
+  #results{ margin-top: 8px; display: none; }
+
+  .toolbar{
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 28px; flex-wrap: wrap; gap: 8px;
+  }
+  .toolbar .count{ font-size: 14px; color: var(--muted); }
+  .toolbar .filename{ font-weight: 600; color: var(--ink); }
+
+  .ghost-btn{
+    font-size: 13px; color: var(--muted); background: none;
+    border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer;
+  }
+  .ghost-btn:hover{ border-color: var(--accent); color: var(--accent); }
+
+  section.panel{ margin-bottom: 24px; }
+  section.panel h2{ font-size: 13px; font-weight: 700; margin: 0 0 4px; }
+  section.panel .panel-desc{ font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+
+  /* Options */
+  .option-row{
+    display: flex; align-items: center; gap: 12px;
+    background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
+  }
+  .option-row label{ font-size: 14px; cursor: pointer; }
+  .option-row .option-sub{ display:block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+
+  .switch{ position: relative; display: inline-block; width: 38px; height: 22px; flex-shrink: 0; }
+  .switch input{ opacity: 0; width: 0; height: 0; }
+  .switch .slider{
+    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+    background: #D9D6C9; transition: background .15s ease; border-radius: 999px;
+  }
+  .switch .slider::before{
+    position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px;
+    background: #fff; transition: transform .15s ease; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,0.18);
+  }
+  .switch input:checked + .slider{ background: var(--accent); }
+  .switch input:checked + .slider::before{ transform: translateX(16px); }
+  .switch input:focus-visible + .slider{ outline: 2px solid var(--accent-soft); outline-offset: 2px; }
+
+  /* Duplicate review table */
+  .dup-shell{ border-color: #E3C9B9; }
+  .dup-th{ padding: 9px 14px; text-align: left; vertical-align: top; }
+  .dup-target{ font-size: 13.5px; }
+  .dup-target.mapped{ font-weight: 700; color: var(--ink); }
+  .dup-target.unmapped{ font-style: italic; color: var(--muted); font-size: 12.5px; }
+  tr.dup-group-label td{
+    background: var(--danger-soft, #F7E9E6);
+    color: var(--danger);
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 7px 16px;
+    border-bottom: 1px solid #EBD3C8;
+  }
+  tr.dup-group-label:not(:first-child) td{ border-top: 2px solid #EBD3C8; }
+  tr.dup-group-label.kind-format td{
+    background: var(--warn-soft);
+    color: var(--warn);
+    border-bottom-color: #E9D8B0;
+  }
+  tr.dup-group-label.kind-format:not(:first-child) td{ border-top-color: #E9D8B0; }
+  tr.dup-group-label.kind-pending td{
+    background: #EFF3E8;
+    color: #5C7A3A;
+    border-bottom-color: #D9E2C8;
+  }
+  tr.dup-group-label.kind-pending:not(:first-child) td{ border-top-color: #D9E2C8; }
+  tr.dup-group-label.kind-delete td{
+    background: var(--danger-soft);
+    color: var(--danger);
+    border-bottom-color: #EBD3C8;
+  }
+  tr.dup-group-label.kind-delete:not(:first-child) td{ border-top-color: #EBD3C8; }
+
+  tr.pending-delete-row td{
+    background: var(--danger-soft);
+    color: var(--danger);
+    text-decoration: line-through;
+    padding: 10px 16px !important;
+  }
+  tr.pending-delete-row td.rownum-td{ background: var(--danger-soft); text-decoration: none; }
+
+  .row-actions-cell{ display: flex; }
+  .row-confirm-btn{
+    width: 100%; height: 100%; min-height: 38px;
+    border: none; background: transparent;
+    color: #C7C4B7; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .row-confirm-btn:hover{ color: var(--accent); background: rgba(43,97,87,0.08); }
+  .row-confirm-btn svg{ width: 15px; height: 15px; }
+  .row-confirm-btn--danger{ color: var(--danger); }
+  .row-confirm-btn--danger:hover{ color: var(--danger); background: rgba(166,64,47,0.1); }
+
+  /* Rows previously flagged, now confirmed — highlighted once back in the main table */
+  tbody tr.was-fixed-row td{ background: var(--warn-soft); }
+  tbody tr.was-fixed-row:hover td{ background: #F7E7C4; }
+
+  /* Editable cells in the review table */
+  .dup-shell td{ padding: 0; }
+  .cell-input{
+    width: 100%;
+    border: none;
+    background: transparent;
+    font-family: var(--sans);
+    font-size: 14px;
+    color: inherit;
+    padding: 10px 16px;
+    box-sizing: border-box;
+  }
+  .cell-input:focus{ outline: 2px solid var(--accent-soft); outline-offset: -2px; background: #fff; }
+  td.cell-edited{ background: var(--accent-soft); }
+  td.cell-edited .cell-input{ font-weight: 600; }
+  td.mono .cell-input{ font-family: var(--mono); color: var(--muted); }
+
+  /* Externe-ID column: never truncate, shrink font only if the table would otherwise overflow */
+  input.id-col-input{
+    width: auto;
+    min-width: 0;
+    font-family: var(--mono);
+    white-space: pre;
+  }
+  td.id-col-cell{ white-space: nowrap; }
+
+  .row-action-cell{ padding: 0 !important; text-align: center; width: 76px; }
+  .action-th{ width: 76px; }
+  .row-delete-btn, .row-reset-btn{
+    width: 100%; height: 100%; min-height: 38px;
+    border: none; background: transparent;
+    color: #C7C4B7; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .row-delete-btn:hover{ color: var(--danger); background: rgba(166,64,47,0.07); }
+  .row-reset-btn:hover{ color: var(--accent); background: rgba(43,97,87,0.08); }
+  .row-delete-btn:disabled, .row-reset-btn:disabled{ opacity: 0.3; cursor: not-allowed; }
+  .row-delete-btn svg, .row-reset-btn svg{ width: 14px; height: 14px; }
+
+  /* Changelog */
+  #changelogPanel summary{
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 12px 14px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    list-style: none;
+  }
+  #changelogPanel summary::-webkit-details-marker{ display: none; }
+  #changelogPanel summary::before{ content: '▸ '; color: var(--muted); }
+  #changelogPanel[open] summary::before{ content: '▾ '; }
+  #changelogPanel summary .changelog-count{ color: var(--muted); font-weight: 500; margin-left: 4px; }
+  .changelog-body{
+    border: 1px solid var(--line); border-top: none;
+    border-radius: 0 0 8px 8px;
+    background: #fff;
+    padding: 4px 14px;
+  }
+  .changelog-body ul{ margin: 0; padding: 10px 0 10px 18px; }
+  .changelog-body li{ font-size: 13px; padding: 4px 0; color: var(--ink); }
+  .changelog-body li .tag{
+    display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.02em; padding: 1px 6px; border-radius: 4px; margin-right: 6px;
+  }
+  .changelog-body li .tag.col{ background: var(--warn-soft); color: var(--warn); }
+  .changelog-body li .tag.row{ background: var(--danger-soft); color: var(--danger); }
+  .changelog-body li .tag.cell{ background: var(--accent-soft); color: var(--accent); }
+  .changelog-actions{
+    display: flex; justify-content: flex-end; padding: 6px 0 10px;
+    border-top: 1px solid var(--line); margin-top: 2px;
+  }
+
+  /* Options drawer */
+  .options-toggle-btn{
+    position: fixed; top: 22px; right: 22px; z-index: 60;
+    display: flex; align-items: center; gap: 6px;
+    background: var(--accent); color: #fff; border: none;
+    border-radius: 999px; padding: 10px 16px 10px 14px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(43,97,87,0.25);
+  }
+  .options-toggle-btn:hover{ background: #234f47; }
+  .options-toggle-btn svg{ width: 15px; height: 15px; }
+
+  .options-overlay{
+    position: fixed; inset: 0; background: rgba(20,20,18,0.28);
+    opacity: 0; pointer-events: none; transition: opacity .18s ease; z-index: 70;
+  }
+  .options-overlay.open{ opacity: 1; pointer-events: auto; }
+
+  .options-drawer{
+    position: fixed; top: 0; right: 0; height: 100vh; width: min(400px, 92vw);
+    background: var(--paper); box-shadow: -12px 0 32px rgba(0,0,0,0.14);
+    transform: translateX(100%); transition: transform .22s ease;
+    z-index: 71; overflow-y: auto; padding: 22px 20px 40px;
+  }
+  .options-drawer.open{ transform: translateX(0); }
+
+  .options-drawer-header{
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 18px; position: sticky; top: -22px; background: var(--paper); padding-top: 4px;
+  }
+  .options-drawer-header h2{ font-size: 17px; font-weight: 700; margin: 0; }
+
+  .options-drawer h3{
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+    color: var(--muted); margin: 22px 0 10px;
+  }
+  .options-drawer h3:first-of-type{ margin-top: 0; }
+
+  .maxlen-row{
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px;
+    margin-top: 8px;
+  }
+  .maxlen-row label{ font-size: 13px; }
+  .maxlen-row .maxlen-sub{ display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .maxlen-row input[type="number"]{
+    width: 56px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px;
+    font-size: 13px; text-align: center; font-family: var(--sans);
+  }
+
+  .csv-ext-list{ display: flex; flex-direction: column; gap: 5px; margin: 8px 0 10px; max-height: 140px; overflow-y: auto; }
+  .csv-ext-item{
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px;
+    font-size: 12px; color: var(--muted);
+  }
+  .csv-ext-item strong{ color: var(--ink); font-weight: 600; }
+  .csv-ext-remove{ border: none; background: none; color: #C7C4B7; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
+  .csv-ext-remove:hover{ color: var(--danger); }
+
+  .csv-ext-form{ display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  .csv-ext-form .fields-row{ display: flex; gap: 6px; }
+  .csv-ext-form input{
+    flex: 1; min-width: 0; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px;
+    font-size: 12.5px; font-family: var(--sans);
+  }
+  .csv-ext-form input:focus{ outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  .csv-ext-form button{
+    align-self: flex-start; font-size: 12px; font-weight: 600; color: var(--accent);
+    background: var(--accent-soft); border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer;
+  }
+  .csv-ext-form button:hover{ background: #D5E6DF; }
+  .csv-ext-note{ font-size: 11.5px; color: var(--muted); margin: 4px 0 0; }
+
+  .drawer-export-btn{
+    display: block; width: 100%; margin-top: 8px;
+    font-size: 12.5px; font-weight: 600; color: var(--accent);
+    background: #fff; border: 1px solid var(--line); border-radius: 7px; padding: 9px 12px; cursor: pointer;
+  }
+  .drawer-export-btn:hover{ border-color: var(--accent); }
+
+  /* Field-level flags (compound name, prefix, invalid username) */
+  td.field-flag{
+    background: var(--warn-soft);
+    text-decoration: underline dotted var(--warn);
+    text-underline-offset: 3px;
+    cursor: help;
+  }
+  tr.dup-group-label.kind-compound td, tr.dup-group-label.kind-prefix td, tr.dup-group-label.kind-username td, tr.dup-group-label.kind-specialchars td{
+    background: var(--warn-soft); color: var(--warn); border-bottom-color: #E9D8B0;
+  }
+  tr.dup-group-label.kind-compound:not(:first-child) td,
+  tr.dup-group-label.kind-prefix:not(:first-child) td,
+  tr.dup-group-label.kind-username:not(:first-child) td,
+  tr.dup-group-label.kind-specialchars:not(:first-child) td{ border-top-color: #E9D8B0; }
+
+  .cell-suggestion{
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 4px 16px 8px; font-size: 11.5px; color: var(--warn);
+  }
+  .cell-suggestion-apply{
+    font-size: 11px; font-weight: 600; color: var(--accent);
+    background: var(--accent-soft); border: none; border-radius: 5px;
+    padding: 2px 8px; cursor: pointer;
+  }
+  .cell-suggestion-apply:hover{ background: #D5E6DF; }
+
+  /* Row number column (view only, never exported) */
+  th.rownum-th, td.rownum-td{
+    position: sticky; left: 0; z-index: 2;
+    background: #F1F0EA;
+    text-align: right;
+    color: #ADA995;
+    font-size: 11.5px;
+    font-family: var(--mono);
+    padding: 10px 10px 10px 14px !important;
+    width: 1%;
+    white-space: nowrap;
+    border-right: 1px solid #E9E7DE;
+  }
+  td.rownum-td{ background: #fff; }
+  tbody tr:hover td.rownum-td{ background: #FBFAF6; }
+  tbody tr.was-fixed-row td.rownum-td{ background: var(--warn-soft); }
+
+  /* Original value shown for comparison under an edited cell */
+  .cell-original{
+    padding: 0 16px 8px; font-size: 11px; color: var(--muted); font-style: italic;
+  }
+
+  /* Confirm-all bar inside the "pending" group label */
+  .confirm-all-btn{
+    margin-left: 12px; font-size: 11.5px; font-weight: 700;
+    background: #fff; color: #5C7A3A; border: 1px solid #D9E2C8; border-radius: 5px;
+    padding: 3px 10px; cursor: pointer;
+  }
+  .confirm-all-btn:hover{ background: #EFF3E8; }
+
+  /* One-time info popup about editing the Externe ID */
+  .id-warning-popup{
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    max-width: 480px; width: calc(100% - 48px);
+    background: #fff; border: 1px solid #E9D8B0; border-left: 4px solid var(--warn);
+    border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    padding: 14px 16px; z-index: 90;
+    opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease;
+    font-size: 13px; color: var(--ink);
+  }
+  .id-warning-popup.open{ opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+  .id-warning-popup strong{ display: block; margin-bottom: 4px; color: var(--warn); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.02em; }
+  .id-warning-popup .id-warning-dismiss{
+    margin-top: 10px; font-size: 12px; font-weight: 600; color: #fff;
+    background: var(--warn); border: none; border-radius: 6px; padding: 6px 14px; cursor: pointer;
+  }
+
+  /* Custom confirmation modal (native window.confirm can be blocked in embedded previews) */
+  .confirm-modal-overlay{
+    position: fixed; inset: 0; background: rgba(20,20,18,0.35);
+    display: none; align-items: center; justify-content: center; z-index: 95; padding: 20px;
+  }
+  .confirm-modal-overlay.open{ display: flex; }
+  .confirm-modal{
+    background: #fff; border-radius: 10px; max-width: 440px; width: 100%;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.25); padding: 22px;
+  }
+  .confirm-modal-title{ font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+  .confirm-modal-message{ font-size: 13.5px; color: var(--muted); white-space: pre-line; line-height: 1.5; }
+  .confirm-modal-actions{ display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+
+  /* Validation + export */
+  .export-bar{
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px;
+  }
+  #validationMsg{ font-size: 13.5px; color: var(--muted); flex: 1; min-width: 200px; }
+  #validationMsg.error{ color: var(--danger); }
+  #validationMsg.ok{ color: var(--accent); }
+
+  .primary-btn{
+    background: var(--accent); color: #fff; border: none; border-radius: 7px;
+    padding: 10px 20px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  .primary-btn:hover:not(:disabled){ background: #234f47; }
+  .primary-btn:disabled{ background: #C9C6BA; cursor: not-allowed; }
+
+  /* Table */
+  .table-shell{ border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+  .table-scroll{ overflow: auto; max-height: 560px; }
+
+  table{ width: 100%; border-collapse: collapse; font-size: 14px; }
+
+  thead th{
+    position: sticky; top: 0;
+    background: #F1F0EA;
+    padding: 0;
+    border-bottom: 1px solid var(--line);
+    border-right: 1px solid #E9E7DE;
+    vertical-align: top;
+  }
+  thead th:last-child{ border-right: none; }
+  thead th.col-over .th-flex{ background: var(--accent-soft); }
+
+  .th-flex{ display: flex; align-items: stretch; min-width: 150px; }
+
+  .col-drag-handle{
+    width: 16px;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    cursor: grab;
+    color: #C7C4B7;
+    font-size: 13px;
+    letter-spacing: -1px;
+    user-select: none;
+  }
+  .col-drag-handle:hover{ color: var(--accent); background: rgba(43,97,87,0.06); }
+  .col-drag-handle:active{ cursor: grabbing; }
+
+  .th-content{
+    padding: 9px 14px 9px 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  select.col-select{
+    font-family: var(--sans);
+    border: none;
+    background: transparent;
+    padding: 1px 2px;
+    margin: 0 -2px;
+    border-radius: 4px;
+    cursor: pointer;
+    max-width: 100%;
+  }
+  select.col-select:hover{ background: rgba(0,0,0,0.04); }
+  select.col-select:focus{ outline: 2px solid var(--accent-soft); background: #fff; }
+
+  select.col-select.mapped{ font-size: 13.5px; font-weight: 700; color: var(--ink); }
+  select.col-select.unmapped{ font-size: 12.5px; font-weight: 500; color: var(--muted); font-style: italic; }
+
+  .col-orig{
+    font-size: 10.5px;
+    color: #ADA995;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .col-delete-btn{
+    width: 22px;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    border: none;
+    background: transparent;
+    color: #C7C4B7;
+    cursor: pointer;
+    border-left: 1px solid transparent;
+  }
+  .col-delete-btn:hover{ color: var(--danger); background: rgba(166,64,47,0.07); border-left-color: #EBD3C8; }
+  .col-delete-btn svg{ width: 13px; height: 13px; }
+
+  .hidden-cols-bar{
+    display: none;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .hidden-col-chip{
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 12.5px; color: var(--muted);
+    background: #fff; border: 1px dashed var(--line); border-radius: 999px;
+    padding: 4px 10px 4px 10px;
+    cursor: pointer;
+  }
+  .hidden-col-chip:hover{ border-color: var(--accent); color: var(--accent); border-style: solid; }
+  .hidden-col-chip .restore-icon{ font-size: 12px; }
+
+  /* Externe-ID format mismatch */
+  td.id-format-mismatch{
+    background: var(--warn-soft);
+    text-decoration: underline dotted var(--warn);
+    text-underline-offset: 3px;
+    cursor: help;
+  }
+
+  tbody td{
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+    border-right: 1px solid #F0EFE9;
+    white-space: nowrap;
+  }
+  tbody td:last-child{ border-right: none; }
+  tbody tr:last-child td{ border-bottom: none; }
+  tbody tr:hover{ background: #FBFAF6; }
+  td.mono{ font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+  td.unmapped-cell{ color: #B7B4A6; }
+  td.empty-note{ text-align: center; color: var(--muted); padding: 24px 16px; }
+
+  @media (max-width: 640px){
+    body{ padding: 32px 14px 60px; }
+    #dropzone{ padding: 40px 16px; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>ASV2paedML</h1>
+      <p>ASV CSV-Datei laden, Spalten direkt im Tabellenkopf zuordnen, bereinigen und paedML ready exportieren.</p>
+    </header>
+
+    <div id="dropzone" tabindex="0" role="button" aria-label="Datei hierher ziehen oder zum Auswählen klicken">
+      <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 15V3"/>
+        <path d="M7 8l5-5 5 5"/>
+        <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
+      </svg>
+      <p>Datei hierher ziehen</p>
+      <p class="sub">oder <span class="browse">Datei auswählen</span> — .csv, .tsv, .txt</p>
+      <input type="file" id="fileInput" accept=".csv,.tsv,.txt">
+    </div>
+
+    <div id="status"></div>
+
+    <div id="results">
+      <div class="toolbar">
+        <div class="count"><span class="filename" id="filename"></span> · <span id="rowCount"></span></div>
+        <button class="ghost-btn" id="changeFileBtn">Andere Datei laden</button>
+      </div>
+
+      <div class="csv-ext-note warn-banner" id="unsavedExtrasWarning" style="margin-bottom:16px;">
+        Hinweis: Du hast eigene Sonderzeichen- und/oder Namenszusatz-Einträge ergänzt. Diese werden nicht dauerhaft gespeichert und gehen beim Neuladen der Seite oder beim Laden einer anderen Datei verloren, falls du sie nicht vorher exportierst.
+      </div>
+
+      <section class="panel" id="duplicatesPanel" style="display:none">
+        <h2>Manueller Abgleich nötig</h2>
+        <p class="panel-desc">Zeilen mit doppelter „Externe ID“, abweichendem Format oder anderen Auffälligkeiten wurden zur Prüfung hierher verschoben. Werte lassen sich direkt anklicken und bearbeiten. Mit dem Mülleimer eine Zeile zur Löschung vormerken — sie erscheint rot durchgestrichen und wird erst mit dem Haken endgültig gelöscht (oder per Rücksetzen-Symbol wieder zurückgenommen). Sobald ein Punkt behoben ist, landet die Zeile im Bereich „Behoben, wartet auf Bestätigung“ — dort bestätigst du sie endgültig für die Haupttabelle.</p>
+        <div class="csv-ext-note warn-banner" id="autoApplyBanner">
+          Automatische Vorschlagsübernahme ist aktiv — bitte jede Zeile vor dem Bestätigen und Export einzeln prüfen.
+        </div>
+        <div class="table-shell dup-shell">
+          <div class="table-scroll">
+            <table>
+              <thead><tr id="dupHeadRow"></tr></thead>
+              <tbody id="dupBodyRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Spalten</h2>
+        <p class="panel-desc">Zielbezeichnung per Klick auf die Spaltenüberschrift wählen. Zum Verschieben am Griff (⠿) links in der Überschrift ziehen. Mit dem Mülleimer-Symbol rechts eine irrelevante Spalte ausblenden. Nicht zugeordnete Spalten werden beim Export weggelassen.</p>
+        <div class="hidden-cols-bar" id="hiddenColsBar"></div>
+        <div class="table-shell">
+          <div class="table-scroll">
+            <table>
+              <thead><tr id="headRow"></tr></thead>
+              <tbody id="bodyRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="changelogSection" style="display:none">
+        <details id="changelogPanel">
+          <summary>Änderungsprotokoll <span class="changelog-count" id="changelogCount"></span></summary>
+          <div class="changelog-body">
+            <div id="changelogList"></div>
+            <div class="changelog-actions">
+              <button class="ghost-btn" id="changelogExportBtn">Protokoll exportieren</button>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section class="panel">
+        <div class="export-bar">
+          <div id="validationMsg"></div>
+          <button class="primary-btn" id="exportBtn">Als CSV exportieren</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <button class="options-toggle-btn" id="optionsToggleBtn" title="Optionen öffnen">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+    Optionen
+  </button>
+  <div class="options-overlay" id="optionsOverlay"></div>
+  <div class="options-drawer" id="optionsDrawer">
+    <div class="options-drawer-header">
+      <h2>Optionen</h2>
+      <button class="ghost-btn" id="optionsCloseBtn">Schließen</button>
+    </div>
+
+    <h3>Prüfungen</h3>
+    <div class="option-row">
+      <label class="switch">
+        <input type="checkbox" id="optExterneId" checked>
+        <span class="slider"></span>
+      </label>
+      <label for="optExterneId">
+        Externe-ID-Verifizierung aktiv
+        <span class="option-sub">Pflichtfeld, prüft auf Dubletten &amp; abweichendes Format.</span>
+      </label>
+    </div>
+    <div class="option-row" style="margin-top:8px">
+      <label class="switch">
+        <input type="checkbox" id="optNamePrefix" checked>
+        <span class="slider"></span>
+      </label>
+      <label for="optNamePrefix">
+        Nachnamenszusätze erkennen
+        <span class="option-sub">z. B. „von“, „van der“, „bin“ — siehe Liste unten.</span>
+      </label>
+    </div>
+    <div class="option-row" style="margin-top:8px">
+      <label class="switch">
+        <input type="checkbox" id="optCompoundNames" checked>
+        <span class="slider"></span>
+      </label>
+      <label for="optCompoundNames">
+        Zusammengesetzte Vor-/Nachnamen erkennen
+        <span class="option-sub">z. B. „Maja-Sophie“ → Vorschlag „Maja“.</span>
+      </label>
+    </div>
+    <div class="option-row" style="margin-top:8px">
+      <label class="switch">
+        <input type="checkbox" id="optSpecialChars" checked>
+        <span class="slider"></span>
+      </label>
+      <label for="optSpecialChars">
+        Sonderzeichen im Namen erkennen
+        <span class="option-sub">Zeichen außerhalb a–z/A–Z, unabhängig vom Benutzernamen.</span>
+      </label>
+    </div>
+    <div class="option-row" style="margin-top:8px">
+      <label class="switch">
+        <input type="checkbox" id="optUsernameRules" checked>
+        <span class="slider"></span>
+      </label>
+      <label for="optUsernameRules">
+        Benutzername-Regeln prüfen
+        <span class="option-sub">Kein Leerzeichen, kein Punkt am Ende, Längenlimit.</span>
+      </label>
+    </div>
+    <div class="maxlen-row">
+      <label for="optUsernameMaxLen">
+        Max. Zeichenlänge
+        <span class="maxlen-sub">17 = Standard für paedML Windows 5.x (Stand 03.09.2026), +1 Punkt erlaubt</span>
+      </label>
+      <input type="number" id="optUsernameMaxLen" min="4" max="64" value="17">
+    </div>
+    <p class="csv-ext-note">Reihenfolge der Prüfung: Externe ID → Nachnamenszusatz → Doppelname → Sonderzeichen → Benutzername. Pro Zeile wird immer nur der ranghöchste offene Punkt angezeigt.</p>
+
+    <h3>Sonderzeichen-Anpassung</h3>
+    <p class="csv-ext-note">Wird zur Bildung ASCII-konformer Benutzernamen-Vorschläge verwendet. Eigene Einträge ergänzen die mitgelieferte Tabelle.</p>
+    <div class="csv-ext-list" id="specialCharExtraList"></div>
+    <div class="csv-ext-form">
+      <div class="fields-row">
+        <input type="text" id="replacementUpperInput" placeholder="Ziel groß (z. B. AE)">
+        <input type="text" id="replacementLowerInput" placeholder="Ziel klein (z. B. ae)">
+      </div>
+      <div class="fields-row">
+        <input type="text" id="specialCharsUpperInput" placeholder="Sonderzeichen groß, z. B. Ä Æ">
+        <input type="text" id="specialCharsLowerInput" placeholder="Sonderzeichen klein, z. B. ä æ">
+      </div>
+      <button type="button" id="specialCharAddBtn">Eintrag hinzufügen</button>
+    </div>
+    <label class="drawer-export-btn" for="specialCharFileInput" style="text-align:center; cursor:pointer;">sz-anpassung.csv laden (ersetzt eigene Einträge)</label>
+    <input type="file" id="specialCharFileInput" accept=".csv" style="display:none">
+    <button class="drawer-export-btn" id="specialCharDownloadBtn">sz-anpassung.csv herunterladen (aktueller Stand)</button>
+
+    <h3>Nachnamenszusätze</h3>
+    <p class="csv-ext-note">Wird genutzt, um Vor-/Nachsätze wie „von“ oder „van der“ vor der Benutzername-Bildung zu erkennen.</p>
+    <div class="csv-ext-list" id="prefixExtraList"></div>
+    <div class="csv-ext-form">
+      <div class="fields-row">
+        <input type="text" id="prefixValue" placeholder="Zusatz (z. B. von / van der)">
+      </div>
+      <button type="button" id="prefixAddBtn">Eintrag hinzufügen</button>
+    </div>
+    <label class="drawer-export-btn" for="prefixFileInput" style="text-align:center; cursor:pointer;">nachnamenszusaetze.csv laden (ersetzt eigene Einträge)</label>
+    <input type="file" id="prefixFileInput" accept=".csv" style="display:none">
+    <button class="drawer-export-btn" id="prefixDownloadBtn">nachnamenszusaetze.csv herunterladen (aktueller Stand)</button>
+
+    <h3>Riskant</h3>
+    <div class="option-row" style="align-items:flex-start; border-color:#E9D8B0;">
+      <label class="switch">
+        <input type="checkbox" id="optAutoApply">
+        <span class="slider"></span>
+      </label>
+      <label for="optAutoApply">
+        Alle Vorschläge automatisch übernehmen
+        <span class="option-sub">Übernimmt jeden verfügbaren Korrekturvorschlag automatisch in die Felder. Ersetzt NICHT die manuelle Bestätigung — jede Zeile muss weiterhin geprüft und bestätigt werden.</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="id-warning-popup" id="idWarningPopup">
+    <strong>Achtung: Externe ID</strong>
+    Die Externe ID ist die Haupt-Identifizierung eines Nutzers beim Import mit ID-Verifizierung. Änderungen können zu Datenverlust und Fehlern führen. Nur fortfahren, wenn du weißt, was du hier tust.
+    <button type="button" class="id-warning-dismiss" id="idWarningDismiss">Verstanden</button>
+  </div>
+
+  <div class="confirm-modal-overlay" id="confirmModalOverlay">
+    <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle" aria-describedby="confirmModalMessage">
+      <div class="confirm-modal-title" id="confirmModalTitle"></div>
+      <div class="confirm-modal-message" id="confirmModalMessage"></div>
+      <div class="confirm-modal-actions">
+        <button type="button" class="ghost-btn" id="confirmModalCancel">Abbrechen</button>
+        <button type="button" class="primary-btn" id="confirmModalOk">Bestätigen</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const MAPPING_FIELDS = ['Vorname', 'Name', 'Klasse', 'Externe ID', 'Kennwort', 'E-Mail-Adresse', 'Benutzername'];
+  const REQUIRED_ALWAYS = ['Vorname', 'Name', 'Klasse'];
+  const MONO_FIELDS = ['Externe ID', 'Kennwort'];
+
+  // Bekannte alternative Spaltenüberschriften je Zielfeld (Vergleich erfolgt kleingeschrieben).
+  const MAPPING_ALIASES = {
+    'Vorname': ['vorname', 'rufname', 'vornamen'],
+    'Name': ['name', 'nachname', 'nachnamen', 'familienname', 'familiennamen'],
+    'Klasse': ['klasse', 'schulklasse', 'klassenbezeichnung'],
+    'Externe ID': ['externe id', 'externeid', 'id', 'schüler-id', 'schueler-id', 'schülerid', 'schuelerid'],
+    'Kennwort': ['kennwort', 'passwort', 'kennwörter', 'kennwoerter'],
+    'E-Mail-Adresse': ['e-mail-adresse', 'email', 'e-mail', 'mail', 'mailadresse', 'emailadresse'],
+    'Benutzername': ['benutzername', 'login', 'nutzername', 'anmeldename']
+  };
+
+  const NONE_VALUE = '';
+  const NONE_LABEL = 'Nicht zugeordnet';
+
+  // ICAO Doc 9303 style transliteration groups (Ziel + zugehörige Sonderzeichen)
+  const SPECIAL_CHAR_BASE_GROUPS = [
+    { upper: 'AE', lower: 'ae', specialsUpper: ['Ä', 'Æ'], specialsLower: ['ä', 'æ'] },
+    { upper: 'OE', lower: 'oe', specialsUpper: ['Ö', 'Œ', 'Ø', 'Ơ'], specialsLower: ['ö', 'œ', 'ø', 'ơ'] },
+    { upper: 'UE', lower: 'ue', specialsUpper: ['Ü', 'Ư'], specialsLower: ['ü', 'ư'] },
+    { upper: 'SS', lower: 'ss', specialsUpper: ['SS'], specialsLower: ['ß'] },
+    { upper: 'AA', lower: 'aa', specialsUpper: ['Å'], specialsLower: ['å'] },
+    { upper: 'TH', lower: 'th', specialsUpper: ['Þ'], specialsLower: ['þ'] },
+    { upper: 'IE', lower: 'ie', specialsUpper: ['Ъ', 'Є'], specialsLower: ['ъ', 'є'] },
+    { upper: 'IU', lower: 'iu', specialsUpper: ['Ю'], specialsLower: ['ю'] },
+    { upper: 'IA', lower: 'ia', specialsUpper: ['Я'], specialsLower: ['я'] },
+    { upper: 'ZH', lower: 'zh', specialsUpper: ['Ж'], specialsLower: ['ж'] },
+    { upper: 'KH', lower: 'kh', specialsUpper: ['Х'], specialsLower: ['х'] },
+    { upper: 'TS', lower: 'ts', specialsUpper: ['Ц'], specialsLower: ['ц'] },
+    { upper: 'CH', lower: 'ch', specialsUpper: ['Ч', 'Ћ'], specialsLower: ['ч', 'ћ'] },
+    { upper: 'SH', lower: 'sh', specialsUpper: ['Ш'], specialsLower: ['ш'] },
+    { upper: 'SHCH', lower: 'shch', specialsUpper: ['Щ'], specialsLower: ['щ'] },
+    { upper: 'DZ', lower: 'dz', specialsUpper: ['Ѕ', 'Џ'], specialsLower: ['ѕ', 'џ'] },
+    { upper: 'LJ', lower: 'lj', specialsUpper: ['Љ'], specialsLower: ['љ'] },
+    { upper: 'NJ', lower: 'nj', specialsUpper: ['Њ'], specialsLower: ['њ'] },
+    { upper: 'L', lower: 'l', specialsUpper: ['Ł'], specialsLower: ['ł'] },
+    { upper: 'D', lower: 'd', specialsUpper: ['Đ', 'Ð', 'Ђ'], specialsLower: ['đ', 'ð', 'ђ'] },
+    { upper: 'T', lower: 't', specialsUpper: ['Ț', 'Ť'], specialsLower: ['ț', 'ť'] },
+    { upper: 'S', lower: 's', specialsUpper: ['Ș', 'Š', 'Ś'], specialsLower: ['ș', 'š', 'ś'] },
+    { upper: 'G', lower: 'g', specialsUpper: ['Ґ', 'Ѓ'], specialsLower: ['ґ', 'ѓ'] },
+    { upper: 'I', lower: 'i', specialsUpper: ['І', 'Ї', 'Ѵ'], specialsLower: ['і', 'ї', 'ѵ'] },
+    { upper: 'K', lower: 'k', specialsUpper: ['Ќ'], specialsLower: ['ќ'] },
+    { upper: 'U', lower: 'u', specialsUpper: ['Ў'], specialsLower: ['ў'] },
+    { upper: 'E', lower: 'e', specialsUpper: ['Ѣ'], specialsLower: ['ѣ'] },
+    { upper: 'F', lower: 'f', specialsUpper: ['Ѳ'], specialsLower: ['ѳ'] }
+  ];
+
+  // Manual fallback for characters without a Unicode NFD decomposition (e.g. Turkish dotless i)
+  const MANUAL_CHAR_FALLBACK = { 'ı': 'i', 'İ': 'I' };
+
+  const NACHNAMENSZUSAETZE_BASE = [
+    'von', 'zu', 'von und zu', 'vom', 'zum',
+    'al- / el-', 'bin / ben', 'bint', 'abu',
+    'di / da', "del / della / de'",
+    "de / d'", 'del / de los / de las', 'dos / da / do',
+    'du', 'de la',
+    'van', 'de / den', 'van der / van den / vanden',
+    'Mac / Mc', "O'", 'Fitz'
+  ];
+
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const status = document.getElementById('status');
+  const results = document.getElementById('results');
+  const unsavedExtrasWarning = document.getElementById('unsavedExtrasWarning');
+  const headRow = document.getElementById('headRow');
+  const bodyRows = document.getElementById('bodyRows');
+  const duplicatesPanel = document.getElementById('duplicatesPanel');
+  const autoApplyBanner = document.getElementById('autoApplyBanner');
+  const dupHeadRow = document.getElementById('dupHeadRow');
+  const dupBodyRows = document.getElementById('dupBodyRows');
+  const hiddenColsBar = document.getElementById('hiddenColsBar');
+  const filenameEl = document.getElementById('filename');
+  const rowCountEl = document.getElementById('rowCount');
+  const changeFileBtn = document.getElementById('changeFileBtn');
+  const optExterneId = document.getElementById('optExterneId');
+  const validationMsg = document.getElementById('validationMsg');
+  const exportBtn = document.getElementById('exportBtn');
+  const changelogSection = document.getElementById('changelogSection');
+  const changelogPanel = document.getElementById('changelogPanel');
+  const changelogCount = document.getElementById('changelogCount');
+  const changelogList = document.getElementById('changelogList');
+  const changelogExportBtn = document.getElementById('changelogExportBtn');
+
+  const optionsToggleBtn = document.getElementById('optionsToggleBtn');
+  const optionsOverlay = document.getElementById('optionsOverlay');
+  const optionsDrawer = document.getElementById('optionsDrawer');
+  const optionsCloseBtn = document.getElementById('optionsCloseBtn');
+  const optCompoundNames = document.getElementById('optCompoundNames');
+  const optNamePrefix = document.getElementById('optNamePrefix');
+  const optSpecialChars = document.getElementById('optSpecialChars');
+  const optUsernameRules = document.getElementById('optUsernameRules');
+  const optUsernameMaxLen = document.getElementById('optUsernameMaxLen');
+  const optAutoApply = document.getElementById('optAutoApply');
+  const specialCharExtraList = document.getElementById('specialCharExtraList');
+  const replacementUpperInput = document.getElementById('replacementUpperInput');
+  const replacementLowerInput = document.getElementById('replacementLowerInput');
+  const specialCharsUpperInput = document.getElementById('specialCharsUpperInput');
+  const specialCharsLowerInput = document.getElementById('specialCharsLowerInput');
+  const specialCharAddBtn = document.getElementById('specialCharAddBtn');
+  const specialCharFileInput = document.getElementById('specialCharFileInput');
+  const specialCharDownloadBtn = document.getElementById('specialCharDownloadBtn');
+  const prefixExtraList = document.getElementById('prefixExtraList');
+  const prefixValue = document.getElementById('prefixValue');
+  const prefixAddBtn = document.getElementById('prefixAddBtn');
+  const prefixFileInput = document.getElementById('prefixFileInput');
+  const prefixDownloadBtn = document.getElementById('prefixDownloadBtn');
+  const idWarningPopup = document.getElementById('idWarningPopup');
+  const idWarningDismiss = document.getElementById('idWarningDismiss');
+  const confirmModalOverlay = document.getElementById('confirmModalOverlay');
+  const confirmModalTitle = document.getElementById('confirmModalTitle');
+  const confirmModalMessage = document.getElementById('confirmModalMessage');
+  const confirmModalCancel = document.getElementById('confirmModalCancel');
+  const confirmModalOk = document.getElementById('confirmModalOk');
+
+  let headers = [];      // original headers from file, index = original column index
+  let dataRows = [];      // array of arrays, aligned to `headers`
+  let order = [];         // array of original column indices, current display/export order
+  let mapping = {};       // originalColIndex -> target field name or ''
+  let hiddenCols = new Set(); // originalColIndex of columns hidden via the trash icon
+  let edits = {};             // rIdx -> { colIdx: newValue } — only entries that differ from the original
+  let deletedRows = new Set(); // rIdx of rows removed via the review table
+  let pendingDeleteRows = new Set(); // rIdx marked for deletion, awaiting final confirmation
+  let confirmedRows = new Set(); // rIdx of review rows manually confirmed as resolved
+  let currentFilename = 'export';
+  let dragFromPos = null;
+
+  // ---------- Extensible reference lists (persisted in the browser) ----------
+
+  let specialCharExtra = [];
+  let prefixExtra = [];
+  let specialCharMap = new Map(); // char -> replacement text
+  let classListLoaded = false; // true, sobald eine Klassenliste erfolgreich geladen wurde
+
+  function loadExtras() {
+    specialCharExtra = [];
+    prefixExtra = [];
+    rebuildSpecialCharMap();
+    rebuildPrefixCache();
+  }
+
+  // Blendet den Hinweis-Banner ein, sobald eigene Sonderzeichen- oder Namenszusatz-Einträge
+  // bestehen (diese werden nicht dauerhaft gespeichert, siehe loadExtras()).
+  function updateUnsavedExtrasWarning() {
+    const hasExtras = specialCharExtra.length > 0 || prefixExtra.length > 0;
+    unsavedExtrasWarning.style.display = hasExtras ? 'block' : 'none';
+  }
+
+  function rebuildSpecialCharMap() {
+    specialCharMap = new Map();
+    allSpecialCharGroups().forEach(group => {
+      (group.specialsUpper || []).forEach(ch => { if (ch) specialCharMap.set(ch, group.upper); });
+      (group.specialsLower || []).forEach(ch => { if (ch) specialCharMap.set(ch, group.lower); });
+    });
+  }
+
+  function allSpecialCharGroups() { return SPECIAL_CHAR_BASE_GROUPS.concat(specialCharExtra); }
+
+  let allPrefixesCache = NACHNAMENSZUSAETZE_BASE;
+  function rebuildPrefixCache() { allPrefixesCache = NACHNAMENSZUSAETZE_BASE.concat(prefixExtra); }
+  function allPrefixes() { return allPrefixesCache; }
+
+  function renderExtraLists() {
+    specialCharExtraList.innerHTML = '';
+    if (specialCharExtra.length === 0) {
+      specialCharExtraList.innerHTML = '<div class="csv-ext-note">Noch keine eigenen Einträge.</div>';
+    } else {
+      specialCharExtra.forEach((group, index) => {
+        const item = document.createElement('div');
+        item.className = 'csv-ext-item';
+        const specials = (group.specialsUpper || []).join(' ') + ' ' + (group.specialsLower || []).join(' ');
+        item.innerHTML = '<span><strong>' + group.upper + '/' + group.lower + '</strong> — ' + specials.trim() + '</span>';
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'csv-ext-remove';
+        removeBtn.textContent = '×';
+        removeBtn.title = 'Eintrag entfernen';
+        removeBtn.setAttribute('aria-label', 'Eintrag entfernen');
+        removeBtn.addEventListener('click', () => {
+          specialCharExtra.splice(index, 1);
+          rebuildSpecialCharMap();
+          updateUnsavedExtrasWarning();
+          renderExtraLists();
+          renderAll();
+        });
+        item.appendChild(removeBtn);
+        specialCharExtraList.appendChild(item);
+      });
+    }
+
+    prefixExtraList.innerHTML = '';
+    if (prefixExtra.length === 0) {
+      prefixExtraList.innerHTML = '<div class="csv-ext-note">Noch keine eigenen Einträge.</div>';
+    } else {
+      prefixExtra.forEach((zusatz, i) => {
+        const item = document.createElement('div');
+        item.className = 'csv-ext-item';
+        const span = document.createElement('span');
+        span.textContent = zusatz;
+        item.appendChild(span);
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'csv-ext-remove';
+        removeBtn.textContent = '×';
+        removeBtn.title = 'Eintrag entfernen';
+        removeBtn.setAttribute('aria-label', 'Eintrag entfernen');
+        removeBtn.addEventListener('click', () => {
+          prefixExtra.splice(i, 1);
+          rebuildPrefixCache();
+          updateUnsavedExtrasWarning();
+          renderExtraLists();
+          renderAll();
+        });
+        item.appendChild(removeBtn);
+        prefixExtraList.appendChild(item);
+      });
+    }
+  }
+
+  specialCharAddBtn.addEventListener('click', () => {
+    const upper = replacementUpperInput.value.trim();
+    const lower = replacementLowerInput.value.trim();
+    const specialsUpper = specialCharsUpperInput.value.trim().split(/\s+/).filter(Boolean);
+    const specialsLower = specialCharsLowerInput.value.trim().split(/\s+/).filter(Boolean);
+    if (!upper || !lower || (specialsUpper.length === 0 && specialsLower.length === 0)) return;
+
+    const conflicting = [...specialsUpper, ...specialsLower].filter(ch => specialCharMap.has(ch));
+    if (conflicting.length > 0) {
+      showInfoModal('Bereits vorhanden', 'Diese Zeichen sind schon zugeordnet und wurden nicht erneut hinzugefügt: ' + conflicting.join(' '));
+      return;
+    }
+
+    specialCharExtra.push({ upper, lower, specialsUpper, specialsLower });
+    rebuildSpecialCharMap();
+    updateUnsavedExtrasWarning();
+    replacementUpperInput.value = ''; replacementLowerInput.value = ''; specialCharsUpperInput.value = ''; specialCharsLowerInput.value = '';
+    renderExtraLists();
+    renderAll();
+  });
+
+  prefixAddBtn.addEventListener('click', () => {
+    const zusatz = prefixValue.value.trim();
+    if (!zusatz) return;
+    const exists = allPrefixes().some(z => z.toLowerCase() === zusatz.toLowerCase());
+    if (exists) {
+      showInfoModal('Bereits vorhanden', '„' + zusatz + '“ ist bereits in der Liste enthalten.');
+      return;
+    }
+    prefixExtra.push(zusatz);
+    rebuildPrefixCache();
+    updateUnsavedExtrasWarning();
+    prefixValue.value = '';
+    renderExtraLists();
+    renderAll();
+  });
+
+  // ---------- Import / export of the two reference CSVs ----------
+
+  // Splits raw file text into non-empty lines, stripping a leading byte-order mark and
+  // normalizing Windows line endings. Shared by every reference-CSV import below.
+  function normalizeCsvLines(text) {
+    return text
+      .replace(/^\uFEFF/, '')
+      .replace(/\r\n/g, '\n')
+      .split('\n')
+      .filter(line => line.trim().length > 0);
+  }
+
+  function detectCsvDelimiter(headerLine) {
+    return headerLine.includes(';') ? ';' : ',';
+  }
+
+  function parseCsvLine(line, delimiter) {
+    // Reuses the same quote-aware parser as the main import.
+    return parseLine(line, delimiter);
+  }
+
+  function parseSpecialCharCsvText(text) {
+    const lines = normalizeCsvLines(text);
+    if (lines.length < 2) return [];
+    const delimiter = detectCsvDelimiter(lines[0]);
+    return lines.slice(1).map(line => {
+      const fields = parseCsvLine(line, delimiter);
+      return {
+        upper: (fields[0] || '').trim(),
+        lower: (fields[1] || '').trim(),
+        specialsUpper: (fields[2] || '').trim().split(/\s+/).filter(Boolean),
+        specialsLower: (fields[3] || '').trim().split(/\s+/).filter(Boolean)
+      };
+    }).filter(group => group.upper && group.lower);
+  }
+
+  function parsePrefixCsvText(text) {
+    const lines = normalizeCsvLines(text);
+    if (lines.length < 2) return [];
+    const delimiter = detectCsvDelimiter(lines[0]);
+    return lines.slice(1)
+      .map(line => (parseCsvLine(line, delimiter)[0] || '').trim())
+      .filter(Boolean);
+  }
+
+  // Strips characters already covered by the built-in table and de-duplicates within the file itself.
+  function dedupeSpecialCharGroups(groups) {
+    const usedChars = new Set();
+    SPECIAL_CHAR_BASE_GROUPS.forEach(group => {
+      (group.specialsUpper || []).forEach(ch => usedChars.add(ch));
+      (group.specialsLower || []).forEach(ch => usedChars.add(ch));
+    });
+    const result = [];
+    groups.forEach(group => {
+      const remainingUpper = (group.specialsUpper || []).filter(ch => !usedChars.has(ch));
+      const remainingLower = (group.specialsLower || []).filter(ch => !usedChars.has(ch));
+      remainingUpper.forEach(ch => usedChars.add(ch));
+      remainingLower.forEach(ch => usedChars.add(ch));
+      if (remainingUpper.length > 0 || remainingLower.length > 0) {
+        result.push({ upper: group.upper, lower: group.lower, specialsUpper: remainingUpper, specialsLower: remainingLower });
+      }
+    });
+    return result;
+  }
+
+  // Strips entries already covered by the built-in list and de-duplicates within the file itself.
+  function dedupePrefixList(list) {
+    const seen = new Set(NACHNAMENSZUSAETZE_BASE.map(z => z.toLowerCase()));
+    const result = [];
+    list.forEach(zusatz => {
+      const key = zusatz.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      result.push(zusatz);
+    });
+    return result;
+  }
+
+  specialCharFileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const parsed = dedupeSpecialCharGroups(parseSpecialCharCsvText(ev.target.result));
+      if (parsed.length > 0) {
+        specialCharExtra = parsed;
+        rebuildSpecialCharMap();
+        updateUnsavedExtrasWarning();
+        renderExtraLists();
+        renderAll();
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+    specialCharFileInput.value = '';
+  });
+
+  prefixFileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const parsed = dedupePrefixList(parsePrefixCsvText(ev.target.result));
+      if (parsed.length > 0) {
+        prefixExtra = parsed;
+        rebuildPrefixCache();
+        updateUnsavedExtrasWarning();
+        renderExtraLists();
+        renderAll();
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+    prefixFileInput.value = '';
+  });
+
+  function downloadTextFile(filename, content, mime) {
+    const blob = new Blob([content], { type: (mime || 'text/csv') + ';charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  specialCharDownloadBtn.addEventListener('click', () => {
+    const lines = ['Ziel (Groß);Ziel (Klein);Sonderzeichen (Groß);Sonderzeichen (Klein)'];
+    allSpecialCharGroups().forEach(group => {
+      lines.push([group.upper, group.lower, (group.specialsUpper || []).join(' '), (group.specialsLower || []).join(' ')].join(';'));
+    });
+    downloadTextFile('sz-anpassung.csv', lines.join('\r\n'));
+  });
+
+  prefixDownloadBtn.addEventListener('click', () => {
+    const lines = ['Zusatz'];
+    allPrefixes().forEach(zusatz => { lines.push(zusatz); });
+    downloadTextFile('nachnamenszusaetze.csv', lines.join('\r\n'));
+  });
+
+
+  // ---------- Options drawer open/close ----------
+
+  function openOptionsDrawer() {
+    optionsDrawer.classList.add('open');
+    optionsOverlay.classList.add('open');
+  }
+  function closeOptionsDrawer() {
+    optionsDrawer.classList.remove('open');
+    optionsOverlay.classList.remove('open');
+  }
+  optionsToggleBtn.addEventListener('click', openOptionsDrawer);
+  optionsCloseBtn.addEventListener('click', closeOptionsDrawer);
+  optionsOverlay.addEventListener('click', closeOptionsDrawer);
+
+  loadExtras();
+  renderExtraLists();
+
+
+  // ---------- Upload handling ----------
+
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+  });
+
+  ['dragenter', 'dragover'].forEach(evt => {
+    dropzone.addEventListener(evt, (e) => {
+      e.preventDefault(); e.stopPropagation();
+      dropzone.classList.add('drag');
+    });
+  });
+  ['dragleave', 'drop'].forEach(evt => {
+    dropzone.addEventListener(evt, (e) => {
+      e.preventDefault(); e.stopPropagation();
+      dropzone.classList.remove('drag');
+    });
+  });
+  dropzone.addEventListener('drop', (e) => {
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  });
+
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) handleFile(file);
+  });
+
+  function resetForNewFile() {
+    results.style.display = 'none';
+    dropzone.style.display = '';
+    status.textContent = '';
+    status.className = '';
+    fileInput.value = '';
+    headers = []; dataRows = []; order = []; mapping = {}; hiddenCols = new Set();
+    edits = {}; deletedRows = new Set(); pendingDeleteRows = new Set(); confirmedRows = new Set();
+    classListLoaded = false;
+  }
+
+  changeFileBtn.addEventListener('click', () => {
+    if (classListLoaded) {
+      showConfirmModal(
+        'Andere Datei laden?',
+        'Alle Änderungen an der aktuellen Klassenliste (Zuordnungen, Bearbeitungen, Löschungen) gehen verloren.',
+        resetForNewFile
+      );
+    } else {
+      resetForNewFile();
+    }
+  });
+
+  function handleFile(file) {
+    status.className = '';
+    status.textContent = 'Lese ' + file.name + ' …';
+    currentFilename = file.name.replace(/\.[^.]+$/, '');
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        parseFile(e.target.result, file.name);
+        initMapping();
+        renderAll();
+        dropzone.style.display = 'none';
+        results.style.display = 'block';
+        status.className = 'ok';
+        status.textContent = 'Datei erfolgreich geladen.';
+        classListLoaded = true;
+      } catch (err) {
+        status.className = 'error';
+        status.textContent = 'Fehler beim Verarbeiten der Datei: ' + err.message;
+      }
+    };
+    reader.onerror = () => {
+      status.className = 'error';
+      status.textContent = 'Die Datei konnte nicht gelesen werden.';
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  // Browser-Standardwarnung beim Verlassen der Seite (Neuladen, Schließen, ...),
+  // sobald eine Klassenliste geladen ist.
+  window.addEventListener('beforeunload', function (e) {
+    if (classListLoaded) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+
+  // ---------- Parsing ----------
+
+  function detectDelimiter(firstLine) {
+    const candidates = ['\t', ';', ','];
+    let best = ',', bestCount = -1;
+    for (const c of candidates) {
+      const count = firstLine.split(c).length;
+      if (count > bestCount) { bestCount = count; best = c; }
+    }
+    return best;
+  }
+
+  function parseLine(line, delim) {
+    const fields = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (line[i + 1] === '"') { cur += '"'; i++; }
+          else { inQuotes = false; }
+        } else { cur += ch; }
+      } else {
+        if (ch === '"') { inQuotes = true; }
+        else if (ch === delim) { fields.push(cur); cur = ''; }
+        else { cur += ch; }
+      }
+    }
+    fields.push(cur);
+    return fields.map(f => f.trim());
+  }
+
+  function parseFile(text, fileName) {
+    const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const lines = normalized.split('\n').filter(l => l.length > 0);
+    if (lines.length < 1) throw new Error('Die Datei enthält keine Daten.');
+    const delim = detectDelimiter(lines[0]);
+    headers = parseLine(lines[0], delim);
+    dataRows = lines.slice(1).map(l => parseLine(l, delim));
+    filenameEl.textContent = fileName;
+    rowCountEl.textContent = dataRows.length + (dataRows.length === 1 ? ' Zeile' : ' Zeilen');
+  }
+
+  function initMapping() {
+    order = headers.map((_, i) => i);
+    mapping = {};
+    hiddenCols = new Set();
+    edits = {};
+    deletedRows = new Set();
+    pendingDeleteRows = new Set();
+    confirmedRows = new Set();
+
+    // Erst je Zielfeld sammeln, welche Spalten passen. Treffen mehrere Spalten auf dasselbe
+    // Zielfeld zu, ist die Zuordnung mehrdeutig -> keine der betroffenen Spalten wird automatisch
+    // zugeordnet (bleibt "Nicht zugeordnet", manuelle Auswahl nötig).
+    const colsByField = {};
+    headers.forEach((h, i) => {
+      const norm = h.trim().toLowerCase();
+      const field = MAPPING_FIELDS.find(f => (MAPPING_ALIASES[f] || []).includes(norm));
+      if (field) {
+        (colsByField[field] = colsByField[field] || []).push(i);
+      }
+    });
+
+    headers.forEach((h, i) => { mapping[i] = NONE_VALUE; });
+    Object.keys(colsByField).forEach(field => {
+      const cols = colsByField[field];
+      if (cols.length === 1) {
+        mapping[cols[0]] = field;
+      }
+    });
+  }
+
+  // ---------- Edits (manual corrections in the review table) ----------
+
+  function getEffectiveValue(rIdx, colIdx) {
+    const rowEdits = edits[rIdx];
+    if (rowEdits && Object.prototype.hasOwnProperty.call(rowEdits, colIdx)) return rowEdits[colIdx];
+    return dataRows[rIdx][colIdx] ?? '';
+  }
+
+  function setEditedValue(rIdx, colIdx, newValue) {
+    const orig = dataRows[rIdx][colIdx] ?? '';
+    if (newValue === orig) {
+      if (edits[rIdx]) {
+        delete edits[rIdx][colIdx];
+        if (Object.keys(edits[rIdx]).length === 0) delete edits[rIdx];
+      }
+    } else {
+      if (!edits[rIdx]) edits[rIdx] = {};
+      edits[rIdx][colIdx] = newValue;
+    }
+    confirmedRows.delete(rIdx); // any edit requires re-confirming the row
+  }
+
+  function csvLineNumber(rIdx) {
+    return rIdx + 2; // +1 for the header line, +1 to make it 1-based
+  }
+
+  function rowLabel(rIdx) {
+    const vornameCol = findMappedCol('Vorname');
+    const nameCol = findMappedCol('Name');
+    const parts = [];
+    if (vornameCol !== undefined) parts.push(getEffectiveValue(rIdx, vornameCol));
+    if (nameCol !== undefined) parts.push(getEffectiveValue(rIdx, nameCol));
+    const label = parts.filter(Boolean).join(' ').trim();
+    if (label) return label;
+    const fallback = headers.map((_, i) => getEffectiveValue(rIdx, i)).filter(Boolean);
+    return fallback.slice(0, 2).join(' ') || ('Zeile ' + (rIdx + 1));
+  }
+
+  function rowRef(rIdx) {
+    return 'Zeile ' + csvLineNumber(rIdx) + ' („' + rowLabel(rIdx) + '“)';
+  }
+
+  // ---------- Externe-ID edit warning (shown once per session) ----------
+
+  function maybeShowIdWarning() {
+    idWarningPopup.classList.add('open');
+  }
+
+  // Custom confirmation modal — used instead of window.confirm(), which some embedded
+  // preview environments silently block (making buttons look "broken").
+  let confirmModalHandler = null;
+  let confirmModalCancelHandler = null;
+  let confirmModalLastFocus = null;
+  function showConfirmModal(title, message, onConfirm, onCancel) {
+    confirmModalTitle.textContent = title;
+    confirmModalMessage.textContent = message;
+    confirmModalHandler = onConfirm;
+    confirmModalCancelHandler = onCancel || null;
+    confirmModalCancel.style.display = '';
+    confirmModalOk.textContent = 'Bestätigen';
+    confirmModalOverlay.classList.add('open');
+    confirmModalLastFocus = document.activeElement;
+    confirmModalCancel.focus();
+  }
+  // Pure information notice — a single acknowledgement button, no "Abbrechen".
+  function showInfoModal(title, message) {
+    confirmModalTitle.textContent = title;
+    confirmModalMessage.textContent = message;
+    confirmModalHandler = null;
+    confirmModalCancelHandler = null;
+    confirmModalCancel.style.display = 'none';
+    confirmModalOk.textContent = 'Verstanden';
+    confirmModalOverlay.classList.add('open');
+    confirmModalLastFocus = document.activeElement;
+    confirmModalOk.focus();
+  }
+  function closeConfirmModal() {
+    confirmModalOverlay.classList.remove('open');
+    confirmModalHandler = null;
+    confirmModalCancelHandler = null;
+    if (confirmModalLastFocus && typeof confirmModalLastFocus.focus === 'function') {
+      confirmModalLastFocus.focus();
+    }
+    confirmModalLastFocus = null;
+  }
+  confirmModalOk.addEventListener('click', () => {
+    const handler = confirmModalHandler;
+    closeConfirmModal();
+    if (handler) handler();
+  });
+  confirmModalCancel.addEventListener('click', () => {
+    const cancelHandler = confirmModalCancelHandler;
+    closeConfirmModal();
+    if (cancelHandler) cancelHandler();
+  });
+  confirmModalOverlay.addEventListener('click', (e) => {
+    if (e.target === confirmModalOverlay) {
+      const cancelHandler = confirmModalCancelHandler;
+      closeConfirmModal();
+      if (cancelHandler) cancelHandler();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && confirmModalOverlay.classList.contains('open')) {
+      const cancelHandler = confirmModalCancelHandler;
+      closeConfirmModal();
+      if (cancelHandler) cancelHandler();
+    }
+  });
+  idWarningDismiss.addEventListener('click', () => idWarningPopup.classList.remove('open'));
+
+  // ---------- Username generation helpers ----------
+
+  function getUsernameMaxLen() {
+    const v = parseInt(optUsernameMaxLen.value, 10);
+    return Number.isFinite(v) && v > 0 ? v : 17;
+  }
+
+  function firstNamePart(value) {
+    if (!value) return '';
+    return value.trim().split(/[-\s]+/)[0] || '';
+  }
+
+  function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+  function detectNamePrefix(surname) {
+    const norm = (surname || '').trim();
+    if (!norm) return null;
+    let best = null;
+    for (const zusatz of allPrefixes()) {
+      const variants = zusatz.split('/').map(v => v.trim()).filter(Boolean);
+      for (const variant of variants) {
+        const variantClean = variant.replace(/[-'\s]+$/, '').trim();
+        if (!variantClean) continue;
+        const re = new RegExp('^' + escapeRegExp(variantClean) + "[\\s'-]+", 'i');
+        const m = norm.match(re);
+        if (m && (!best || m[0].length > best.prefix.length)) {
+          best = { prefix: m[0].trim(), rest: norm.slice(m[0].length).trim(), zusatz };
+        }
+      }
+    }
+    return best;
+  }
+
+  function surnameBaseForUsername(surname) {
+    let s = surname || '';
+    const pfx = detectNamePrefix(s);
+    if (pfx) s = pfx.rest;
+    return firstNamePart(s);
+  }
+
+  function isCharResolvable(ch) {
+    if (/[A-Za-z]/.test(ch)) return true;
+    if (specialCharMap.has(ch)) return true;
+    const decomposed = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (decomposed && decomposed !== ch && /^[A-Za-z]+$/.test(decomposed)) return true;
+    return !!MANUAL_CHAR_FALLBACK[ch];
+  }
+
+  // Whether every character in a value can be translated to a-zA-Z — used to decide whether an
+  // automatic suggestion may be shown at all, instead of silently producing an incomplete one.
+  function canFullyTransliterate(value) {
+    return Array.from(value || '').every(isCharResolvable);
+  }
+
+  function transliterateChar(ch) {
+    if (/[A-Za-z]/.test(ch)) return ch;
+    if (specialCharMap.has(ch)) {
+      return specialCharMap.get(ch);
+    }
+    const decomposed = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (decomposed && decomposed !== ch && /^[A-Za-z]+$/.test(decomposed)) {
+      return decomposed;
+    }
+    if (MANUAL_CHAR_FALLBACK[ch]) {
+      return MANUAL_CHAR_FALLBACK[ch];
+    }
+    return '';
+  }
+
+  function transliterateString(str) {
+    return Array.from(str || '').map(transliterateChar).join('');
+  }
+
+  // Detects characters outside a-zA-Z; hyphen/space/apostrophe are structural, not "special" here.
+  function hasSpecialChars(value) {
+    const stripped = (value || '').replace(/[-\s']/g, '');
+    return /[^A-Za-z]/.test(stripped);
+  }
+
+  // Proper-case transliteration for a human-readable name suggestion (not the lowercase username):
+  // a leading special character keeps only its first replacement letter capitalized, e.g. Ö → "Oe", not "OE".
+  function transliterateWordProperCase(word) {
+    let result = '';
+    let isFirstOutputChar = true;
+    for (const ch of Array.from(word || '')) {
+      if (/[A-Za-z]/.test(ch)) { result += ch; isFirstOutputChar = false; continue; }
+      let target = '';
+      if (specialCharMap.has(ch)) {
+        target = specialCharMap.get(ch);
+      } else {
+        const decomposed = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (decomposed && decomposed !== ch && /^[A-Za-z]+$/.test(decomposed)) { target = decomposed; }
+        else if (MANUAL_CHAR_FALLBACK[ch]) { target = MANUAL_CHAR_FALLBACK[ch]; }
+      }
+      if (!target) continue;
+      target = isFirstOutputChar
+        ? target.charAt(0).toUpperCase() + target.slice(1).toLowerCase()
+        : target.toLowerCase();
+      result += target;
+      isFirstOutputChar = false;
+    }
+    return result;
+  }
+
+  function transliterateNameProperCase(value) {
+    return (value || '').split(/([-\s]+)/).map(part => (/^[-\s]+$/.test(part) ? part : transliterateWordProperCase(part))).join('');
+  }
+
+  function generateUsernameSuggestion(vorname, nachname) {
+    const maxLen = getUsernameMaxLen();
+    let first = transliterateString(firstNamePart(vorname)).toLowerCase().replace(/[^a-z]/g, '');
+    let last = transliterateString(surnameBaseForUsername(nachname)).toLowerCase().replace(/[^a-z]/g, '');
+    const budget = maxLen + 1; // one dot allowance
+
+    let candidate = last ? (first + '.' + last) : first;
+    if (candidate.length > budget) {
+      if (last) {
+        const overflow = candidate.length - budget;
+        if (last.length - overflow >= 1) {
+          last = last.slice(0, last.length - overflow);
+          candidate = first + '.' + last;
+        } else {
+          last = '';
+          first = first.slice(0, budget);
+          candidate = first;
+        }
+      } else {
+        first = first.slice(0, budget);
+        candidate = first;
+      }
+    }
+    return candidate;
+  }
+
+  function validateUsername(value) {
+    const maxLen = getUsernameMaxLen();
+    if (!value) return { valid: true };
+    if (/\s/.test(value)) return { valid: false, reason: 'enthält Leerzeichen' };
+    if (value.endsWith('.')) return { valid: false, reason: 'endet auf einen Punkt' };
+    if (!/^[A-Za-z]+(\.[A-Za-z]+)?$/.test(value)) return { valid: false, reason: 'enthält unzulässige Zeichen' };
+    const dotCount = (value.match(/\./g) || []).length;
+    if (value.length > maxLen + dotCount) return { valid: false, reason: 'zu lang (max. ' + maxLen + ' Zeichen + 1 Punkt)' };
+    return { valid: true };
+  }
+
+  // ---------- Change log (current state vs. original import) ----------
+
+  function computeChangeLog() {
+    const entries = [];
+
+    headers.forEach((h, colIdx) => {
+      if (hiddenCols.has(colIdx)) {
+        entries.push({ changeType: 'col', text: 'Spalte „' + (h || '(ohne Titel)') + '“ entfernt' });
+      }
+    });
+
+    headers.forEach((h, colIdx) => {
+      if (hiddenCols.has(colIdx)) return;
+      const mappedField = mapping[colIdx];
+      if (!mappedField) return;
+      const origNorm = (h || '').trim().toLowerCase();
+      if (mappedField.toLowerCase() !== origNorm) {
+        entries.push({
+          changeType: 'col',
+          text: 'Spalte „' + (h || '(ohne Titel)') + '“ wird als „' + mappedField + '“ exportiert'
+        });
+      }
+    });
+
+    const originalOrder = headers.map((_, i) => i);
+    const orderChanged = order.length !== originalOrder.length || order.some((v, i) => v !== originalOrder[i]);
+    if (orderChanged) {
+      const currentNames = order.map(i => headers[i] || '(ohne Titel)').join(', ');
+      entries.push({ changeType: 'col', text: 'Spaltenreihenfolge geändert — jetzt: ' + currentNames });
+    }
+
+    deletedRows.forEach(rIdx => {
+      entries.push({ changeType: 'row', text: rowRef(rIdx) + ' gelöscht' });
+    });
+
+    Object.keys(edits).forEach(rIdxStr => {
+      const rIdx = Number(rIdxStr);
+      if (deletedRows.has(rIdx) || pendingDeleteRows.has(rIdx)) return;
+      if (!confirmedRows.has(rIdx)) return; // only record edits once the row has been confirmed
+      Object.keys(edits[rIdx]).forEach(colIdxStr => {
+        const colIdx = Number(colIdxStr);
+        const orig = dataRows[rIdx][colIdx] ?? '';
+        const now = edits[rIdx][colIdx];
+        const colLabel = mapping[colIdx] || headers[colIdx] || ('Spalte ' + (colIdx + 1));
+        entries.push({
+          changeType: 'cell',
+          text: rowRef(rIdx) + ' – ' + colLabel + ': „' + orig + '“ → „' + now + '“'
+        });
+      });
+    });
+
+    return entries;
+  }
+
+  function renderChangelog() {
+    const entries = computeChangeLog();
+    if (entries.length === 0) {
+      changelogSection.style.display = 'none';
+      changelogPanel.open = false;
+      return;
+    }
+    changelogSection.style.display = '';
+    changelogCount.textContent = '(' + entries.length + ')';
+    changelogList.innerHTML = '';
+    const ul = document.createElement('ul');
+    entries.forEach(entry => {
+      const li = document.createElement('li');
+      const tag = document.createElement('span');
+      tag.className = 'tag ' + entry.changeType;
+      tag.textContent = entry.changeType === 'col' ? 'Spalte' : entry.changeType === 'row' ? 'Zeile' : 'Wert';
+      li.appendChild(tag);
+      li.appendChild(document.createTextNode(entry.text));
+      ul.appendChild(li);
+    });
+    changelogList.appendChild(ul);
+    changelogPanel.open = true;
+  }
+
+  changelogExportBtn.addEventListener('click', () => {
+    const entries = computeChangeLog();
+    const lines = ['Änderungsprotokoll — ' + currentFilename, ''];
+    if (entries.length === 0) {
+      lines.push('Keine Änderungen gegenüber dem Original.');
+    } else {
+      entries.forEach((entry, i) => lines.push((i + 1) + '. ' + entry.text));
+    }
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = currentFilename + '_aenderungsprotokoll.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  // ---------- Validation ----------
+
+  function findMappedCol(target) {
+    return order.find(i => mapping[i] === target);
+  }
+
+  function usedTargets() {
+    return Object.values(mapping).filter(v => v !== NONE_VALUE);
+  }
+
+  function requiredFields() {
+    const req = [...REQUIRED_ALWAYS];
+    if (optExterneId.checked) req.push('Externe ID');
+    return req;
+  }
+
+  function renderValidation() {
+    const req = requiredFields();
+    const used = usedTargets();
+    const missing = req.filter(f => !used.includes(f));
+
+    const { pulledRowIndices } = computeReviewGroups();
+    const dupNote = pulledRowIndices.size > 0
+      ? ' ' + pulledRowIndices.size + ' Zeile(n) sind zur Prüfung im Bereich „Manueller Abgleich nötig“ zurückgestellt' +
+        (pendingDeleteRows.size > 0 ? ' (davon ' + pendingDeleteRows.size + ' zur Löschung vorgemerkt)' : '') + '.'
+      : '';
+
+    if (missing.length > 0) {
+      validationMsg.className = 'error';
+      validationMsg.textContent = 'Noch nicht zugeordnet: ' + missing.join(', ') + '.' + dupNote;
+      exportBtn.disabled = true;
+    } else {
+      validationMsg.className = 'ok';
+      const exportColCount = order.filter(i => !hiddenCols.has(i) && mapping[i] !== NONE_VALUE).length;
+      const exportRowCount = dataRows.length - pulledRowIndices.size;
+      validationMsg.textContent = 'Bereit zum Export — ' + exportRowCount + ' Zeile(n), ' + exportColCount + ' von ' + order.length + ' Spalten.' + dupNote;
+      exportBtn.disabled = false;
+    }
+  }
+
+  optExterneId.addEventListener('change', renderAll);
+  optCompoundNames.addEventListener('change', renderAll);
+  optNamePrefix.addEventListener('change', renderAll);
+  optSpecialChars.addEventListener('change', renderAll);
+  optUsernameRules.addEventListener('change', renderAll);
+  optUsernameMaxLen.addEventListener('change', renderAll);
+
+  optAutoApply.addEventListener('change', () => {
+    if (optAutoApply.checked) {
+      showConfirmModal(
+        'Sind Sie sich wirklich sicher??',
+        'Diese Funktion übernimmt automatisch JEDEN verfügbaren Korrekturvorschlag in die Daten — ohne dass du jeden einzelnen einzeln bestätigst.\n\n' +
+        'Dabei können Fehler auftreten (z. B. falsch erkannte Zusätze oder unpassende Kürzungen). Eine explizite Prüfung aller Zeilen vor der endgültigen Bestätigung und dem Export bleibt zwingend erforderlich.\n\n' +
+        'Wirklich aktivieren?',
+        () => { renderAll(); },
+        () => { optAutoApply.checked = false; }
+      );
+    } else {
+      renderAll();
+    }
+  });
+
+  // ---------- Format check for "Externe ID" ----------
+
+  function computeExterneIdFormatIssue(getValue) {
+    getValue = getValue || getEffectiveValue;
+    const idCol = findMappedCol('Externe ID');
+    const mismatchRows = new Set();
+    if (idCol === undefined) return { idCol, mismatchRows, example: null };
+
+    const shapeCounts = new Map();
+    const parsed = [];
+    dataRows.forEach((row, rIdx) => {
+      if (deletedRows.has(rIdx) || pendingDeleteRows.has(rIdx)) return;
+      const v = getValue(rIdx, idCol).trim();
+      if (!v) return;
+      const shape = v.split('-').map(seg => seg.length).join('-');
+      parsed.push({ rIdx, v, shape });
+      shapeCounts.set(shape, (shapeCounts.get(shape) || 0) + 1);
+    });
+    if (parsed.length === 0) return { idCol, mismatchRows, example: null };
+
+    let majorityShape = null, majorityCount = -1;
+    shapeCounts.forEach((count, shape) => { if (count > majorityCount) { majorityCount = count; majorityShape = shape; } });
+    const example = (parsed.find(p => p.shape === majorityShape) || {}).v;
+
+    parsed.forEach(p => { if (p.shape !== majorityShape) mismatchRows.add(p.rIdx); });
+    return { idCol, mismatchRows, example };
+  }
+
+  function applyIdMismatchStyle(td, colIdx, rIdx, idIssue) {
+    if (idIssue.idCol === colIdx && idIssue.mismatchRows.has(rIdx)) {
+      td.classList.add('id-format-mismatch');
+      td.title = 'Abweichendes Format der Externen ID — übliches Format hier z. B. „' + idIssue.example + '“';
+    }
+  }
+
+  // ---------- Duplicate detection on "Externe ID" ----------
+
+  function findExterneIdColIndex() {
+    return findMappedCol('Externe ID');
+  }
+
+  function computeDuplicateGroups(getValue) {
+    getValue = getValue || getEffectiveValue;
+    const idCol = findExterneIdColIndex();
+    const dupRowIndices = new Set();
+    const groups = [];
+    if (idCol === undefined) return { idCol, dupRowIndices, groups };
+
+    const valueMap = new Map();
+    dataRows.forEach((row, rIdx) => {
+      if (deletedRows.has(rIdx) || pendingDeleteRows.has(rIdx)) return;
+      const val = getValue(rIdx, idCol).trim();
+      if (!val) return;
+      if (!valueMap.has(val)) valueMap.set(val, []);
+      valueMap.get(val).push(rIdx);
+    });
+
+    valueMap.forEach((rowIndices, value) => {
+      if (rowIndices.length > 1) {
+        groups.push({ value, rowIndices });
+        rowIndices.forEach(i => dupRowIndices.add(i));
+      }
+    });
+    groups.sort((a, b) => a.rowIndices[0] - b.rowIndices[0]);
+    return { idCol, dupRowIndices, groups };
+  }
+
+  function computeReviewGroups() {
+    const originalGetter = (rIdx, colIdx) => dataRows[rIdx][colIdx] ?? '';
+
+    const liveDup = computeDuplicateGroups(getEffectiveValue);
+    const liveIdIssue = computeExterneIdFormatIssue(getEffectiveValue);
+    const originalDup = computeDuplicateGroups(originalGetter);
+    const originalIdIssue = computeExterneIdFormatIssue(originalGetter);
+
+    const vornameCol = findMappedCol('Vorname');
+    const nameCol = findMappedCol('Name');
+    const benutzernameCol = findMappedCol('Benutzername');
+
+    const dupValueByRow = new Map();
+    liveDup.groups.forEach(group => group.rowIndices.forEach(rowIndex => dupValueByRow.set(rowIndex, group.value)));
+
+    // Priority chain: UID (Dublette/Format) > Namenszusatz > Doppelname > Sonderzeichen > Benutzername.
+    // Each row only ever surfaces its single highest-priority open issue.
+    function resolveCategory(rIdx, getValue, dupRowsSet, formatRowsSet) {
+      if (dupRowsSet.has(rIdx)) return { tier: 1, kind: 'dup' };
+      if (formatRowsSet.has(rIdx)) return { tier: 1, kind: 'format' };
+      if (optNamePrefix.checked && nameCol !== undefined) {
+        if (detectNamePrefix(getValue(rIdx, nameCol))) return { tier: 2, kind: 'prefix' };
+      }
+      if (optCompoundNames.checked) {
+        const vv = vornameCol !== undefined ? getValue(rIdx, vornameCol) : '';
+        const nv = nameCol !== undefined ? getValue(rIdx, nameCol) : '';
+        if (/[-\s]/.test(vv.trim()) || /[-\s]/.test(nv.trim())) return { tier: 3, kind: 'compound' };
+      }
+      if (optSpecialChars.checked) {
+        const vv = vornameCol !== undefined ? getValue(rIdx, vornameCol) : '';
+        const nv = nameCol !== undefined ? getValue(rIdx, nameCol) : '';
+        if (hasSpecialChars(vv) || hasSpecialChars(nv)) return { tier: 4, kind: 'specialchars' };
+      }
+      if (optUsernameRules.checked && benutzernameCol !== undefined) {
+        const val = getValue(rIdx, benutzernameCol);
+        if (val && !validateUsername(val).valid) return { tier: 5, kind: 'username' };
+      }
+      return null;
+    }
+
+    const liveCategories = new Map();
+    const originalCategories = new Map();
+    dataRows.forEach((row, rIdx) => {
+      if (deletedRows.has(rIdx) || pendingDeleteRows.has(rIdx)) return;
+      const liveCat = resolveCategory(rIdx, getEffectiveValue, liveDup.dupRowIndices, liveIdIssue.mismatchRows);
+      if (liveCat) liveCategories.set(rIdx, liveCat);
+      const origCat = resolveCategory(rIdx, originalGetter, originalDup.dupRowIndices, originalIdIssue.mismatchRows);
+      if (origCat) originalCategories.set(rIdx, origCat);
+    });
+
+    const liveProblemRows = new Set(liveCategories.keys());
+    const allProblemRows = new Set([...liveProblemRows, ...originalCategories.keys()]);
+
+    // Build display groups purely from the LIVE (winning) categories.
+    const groupMap = new Map();
+    liveCategories.forEach((cat, rIdx) => {
+      let key;
+      if (cat.kind === 'dup') key = 'dup:' + dupValueByRow.get(rIdx);
+      else if (cat.kind === 'format') key = 'format:' + getEffectiveValue(rIdx, liveIdIssue.idCol).trim();
+      else if (cat.kind === 'username') key = 'username:' + getEffectiveValue(rIdx, benutzernameCol).trim();
+      else key = cat.kind;
+      if (!groupMap.has(key)) groupMap.set(key, { kind: cat.kind, rowIndices: [] });
+      groupMap.get(key).rowIndices.push(rIdx);
+    });
+
+    const reviewGroups = [];
+    groupMap.forEach((group, key) => {
+      const rowCount = group.rowIndices.length;
+      const plural = rowCount === 1 ? ' Eintrag' : ' Einträge';
+      let label;
+      if (group.kind === 'dup') label = 'Doppelte Externe ID „' + key.slice(4) + '“ · ' + rowCount + plural;
+      else if (group.kind === 'format') label = 'Fehlerhafte Externe ID „' + key.slice(7) + '“ · ' + rowCount + plural;
+      else if (group.kind === 'username') label = 'Ungültiger Benutzername „' + key.slice(9) + '“ · ' + rowCount + plural;
+      else if (group.kind === 'prefix') label = 'Nachname mit Zusatz erkannt · ' + rowCount + plural;
+      else if (group.kind === 'compound') label = 'Zusammengesetzter Vor- oder Nachname erkannt · ' + rowCount + plural;
+      else if (group.kind === 'specialchars') label = 'Sonderzeichen im Namen erkannt · ' + rowCount + plural;
+      reviewGroups.push({ kind: group.kind, label, rowIndices: group.rowIndices.sort((a, b) => a - b) });
+    });
+
+    // Rows that were originally flagged (at any tier) but currently have no live problem — wait for confirmation.
+    const pendingConfirmRows = Array.from(allProblemRows)
+      .filter(r => !liveProblemRows.has(r) && !confirmedRows.has(r))
+      .sort((a, b) => a - b);
+    if (pendingConfirmRows.length > 0) {
+      reviewGroups.push({
+        kind: 'pending',
+        label: 'Behoben, wartet auf Bestätigung · ' + pendingConfirmRows.length + (pendingConfirmRows.length === 1 ? ' Eintrag' : ' Einträge'),
+        rowIndices: pendingConfirmRows
+      });
+    }
+
+    if (pendingDeleteRows.size > 0) {
+      const rows = Array.from(pendingDeleteRows).sort((a, b) => a - b);
+      reviewGroups.push({
+        kind: 'delete',
+        label: 'Zur Löschung vorgemerkt · ' + rows.length + (rows.length === 1 ? ' Eintrag' : ' Einträge'),
+        rowIndices: rows
+      });
+    }
+
+    const KIND_RANK = { delete: -1, pending: 0, dup: 1, format: 1, prefix: 2, compound: 3, specialchars: 4, username: 5 };
+    reviewGroups.sort((a, b) => {
+      const rankDiff = (KIND_RANK[a.kind] ?? 99) - (KIND_RANK[b.kind] ?? 99);
+      return rankDiff !== 0 ? rankDiff : a.rowIndices[0] - b.rowIndices[0];
+    });
+
+    const pulledRowIndices = new Set([...liveProblemRows, ...pendingConfirmRows, ...pendingDeleteRows, ...deletedRows]);
+
+    // Info bundle used by the renderer to build tooltips/suggestions for the winning categories only.
+    const compoundRows = new Set();
+    const prefixRows = new Map();
+    const specialCharsRows = new Set();
+    const usernameRows = new Map();
+    liveCategories.forEach((cat, rIdx) => {
+      if (cat.kind === 'compound') compoundRows.add(rIdx);
+      if (cat.kind === 'prefix' && nameCol !== undefined) prefixRows.set(rIdx, detectNamePrefix(getEffectiveValue(rIdx, nameCol)));
+      if (cat.kind === 'specialchars') specialCharsRows.add(rIdx);
+      if (cat.kind === 'username' && benutzernameCol !== undefined) {
+        const val = getEffectiveValue(rIdx, benutzernameCol);
+        const vv = vornameCol !== undefined ? getEffectiveValue(rIdx, vornameCol) : '';
+        const nv = nameCol !== undefined ? getEffectiveValue(rIdx, nameCol) : '';
+        const resolvable = canFullyTransliterate(vv) && canFullyTransliterate(nv);
+        usernameRows.set(rIdx, {
+          reason: validateUsername(val).reason,
+          suggestion: resolvable ? generateUsernameSuggestion(vv, nv) : null
+        });
+      }
+    });
+    const nameIssues = { vornameCol, nameCol, benutzernameCol, compoundRows, prefixRows, specialCharsRows, usernameRows };
+
+    return { reviewGroups, pulledRowIndices, idIssue: liveIdIssue, nameIssues };
+  }
+
+  function applyFieldFlag(td, colIdx, rIdx, nameIssues) {
+    if (colIdx === nameIssues.vornameCol && nameIssues.compoundRows.has(rIdx) && /[-\s]/.test(getEffectiveValue(rIdx, colIdx).trim())) {
+      td.classList.add('field-flag');
+      td.title = 'Zusammengesetzter Vorname — Vorschlag für Benutzernamen-Bildung: „' + firstNamePart(getEffectiveValue(rIdx, colIdx)) + '“';
+    }
+    if (colIdx === nameIssues.nameCol) {
+      if (nameIssues.compoundRows.has(rIdx) && /[-\s]/.test(getEffectiveValue(rIdx, colIdx).trim())) {
+        td.classList.add('field-flag');
+        td.title = 'Zusammengesetzter Nachname — Vorschlag für Benutzernamen-Bildung: „' + firstNamePart(getEffectiveValue(rIdx, colIdx)) + '“';
+      }
+      if (nameIssues.prefixRows.has(rIdx)) {
+        const pfx = nameIssues.prefixRows.get(rIdx);
+        td.classList.add('field-flag');
+        td.title = 'Nachnamenszusatz „' + pfx.prefix + '“ erkannt — Basis für Benutzernamen-Bildung: „' + firstNamePart(pfx.rest) + '“';
+      }
+    }
+    if ((colIdx === nameIssues.vornameCol || colIdx === nameIssues.nameCol) && nameIssues.specialCharsRows.has(rIdx)) {
+      if (hasSpecialChars(getEffectiveValue(rIdx, colIdx))) {
+        td.classList.add('field-flag');
+        const val = getEffectiveValue(rIdx, colIdx);
+        td.title = canFullyTransliterate(val)
+          ? 'Enthält Sonderzeichen — Vorschlag: „' + transliterateNameProperCase(val) + '“'
+          : 'Enthält Sonderzeichen, die nicht automatisch übersetzt werden können — bitte manuell anpassen.';
+      }
+    }
+    if (colIdx === nameIssues.benutzernameCol && nameIssues.usernameRows.has(rIdx)) {
+      const info = nameIssues.usernameRows.get(rIdx);
+      td.classList.add('field-flag');
+      td.title = info.suggestion
+        ? 'Ungültiger Benutzername (' + info.reason + ') — Vorschlag: „' + info.suggestion + '“'
+        : 'Ungültiger Benutzername (' + info.reason + ') — kein automatischer Vorschlag möglich, bitte manuell anpassen.';
+    }
+  }
+
+  // Direct, one-click correction suggestions for the categories where an automatic fix makes sense
+  // (duplicates and format mismatches always require a human decision, so they are excluded here).
+  function getCellSuggestion(rIdx, colIdx, nameIssues) {
+    if (colIdx === nameIssues.nameCol && nameIssues.prefixRows.has(rIdx)) {
+      const pfx = nameIssues.prefixRows.get(rIdx);
+      return { suggestedValue: pfx.rest };
+    }
+    if (colIdx === nameIssues.vornameCol || colIdx === nameIssues.nameCol) {
+      const value = getEffectiveValue(rIdx, colIdx);
+      if (nameIssues.compoundRows.has(rIdx) && /[-\s]/.test(value.trim())) {
+        return { suggestedValue: firstNamePart(value) };
+      }
+      if (nameIssues.specialCharsRows.has(rIdx) && hasSpecialChars(value) && canFullyTransliterate(value)) {
+        return { suggestedValue: transliterateNameProperCase(value) };
+      }
+    }
+    if (colIdx === nameIssues.benutzernameCol && nameIssues.usernameRows.has(rIdx)) {
+      const sugg = nameIssues.usernameRows.get(rIdx).suggestion;
+      return sugg ? { suggestedValue: sugg } : null;
+    }
+    return null;
+  }
+
+  function renderDuplicatesTable(reviewGroups, idIssue, nameIssues, visibleOrder) {
+    dupHeadRow.innerHTML = '';
+    dupBodyRows.innerHTML = '';
+
+    if (reviewGroups.length === 0) {
+      duplicatesPanel.style.display = 'none';
+      return;
+    }
+    duplicatesPanel.style.display = '';
+
+    const rownumTh = document.createElement('th');
+    rownumTh.className = 'dup-th rownum-th';
+    rownumTh.textContent = '#';
+    dupHeadRow.appendChild(rownumTh);
+
+    visibleOrder.forEach(colIdx => {
+      const th = document.createElement('th');
+      th.className = 'dup-th';
+      const mappedFieldLabel = document.createElement('div');
+      mappedFieldLabel.className = 'dup-target ' + (mapping[colIdx] ? 'mapped' : 'unmapped');
+      mappedFieldLabel.textContent = mapping[colIdx] || NONE_LABEL;
+      const orig = document.createElement('div');
+      orig.className = 'col-orig';
+      orig.textContent = headers[colIdx] || '(ohne Titel)';
+      th.appendChild(mappedFieldLabel);
+      th.appendChild(orig);
+      dupHeadRow.appendChild(th);
+    });
+    const actionTh = document.createElement('th');
+    actionTh.className = 'dup-th action-th';
+    dupHeadRow.appendChild(actionTh);
+
+    reviewGroups.forEach(group => {
+      const labelTr = document.createElement('tr');
+      labelTr.className = 'dup-group-label kind-' + group.kind;
+      const labelTd = document.createElement('td');
+      labelTd.colSpan = visibleOrder.length + 2;
+      labelTd.textContent = group.label;
+      labelTr.appendChild(labelTd);
+
+      if (group.kind === 'pending') {
+        const confirmAllBtn = document.createElement('button');
+        confirmAllBtn.type = 'button';
+        confirmAllBtn.className = 'confirm-all-btn';
+        confirmAllBtn.textContent = 'Alle bestätigen';
+        confirmAllBtn.addEventListener('click', () => {
+          const n = group.rowIndices.length;
+          showConfirmModal(
+            'Alle bestätigen?',
+            'Wirklich alle ' + n + (n === 1 ? ' Zeile' : ' Zeilen') + ' als geprüft bestätigen?\n\n' +
+            'Damit wandern sie zurück in die Haupttabelle. Bitte nur bestätigen, wenn du dir sicher bist, dass die Korrekturen stimmen.',
+            () => {
+              group.rowIndices.forEach(r => confirmedRows.add(r));
+              renderAll();
+            }
+          );
+        });
+        labelTd.appendChild(confirmAllBtn);
+      }
+
+      dupBodyRows.appendChild(labelTr);
+
+      group.rowIndices.forEach(rIdx => {
+        const tr = document.createElement('tr');
+        if (group.kind === 'delete') tr.classList.add('pending-delete-row');
+
+        const rownumTd = document.createElement('td');
+        rownumTd.className = 'rownum-td';
+        rownumTd.textContent = csvLineNumber(rIdx);
+        tr.appendChild(rownumTd);
+
+        if (group.kind === 'delete') {
+          // Read-only preview — editing a row that's about to be deleted doesn't make sense.
+          visibleOrder.forEach(colIdx => {
+            const td = document.createElement('td');
+            td.textContent = getEffectiveValue(rIdx, colIdx);
+            tr.appendChild(td);
+          });
+        } else {
+          visibleOrder.forEach(colIdx => {
+          const td = document.createElement('td');
+          if (mapping[colIdx] === NONE_VALUE) {
+            td.classList.add('unmapped-cell');
+          } else if (MONO_FIELDS.includes(mapping[colIdx])) {
+            td.classList.add('mono');
+          }
+          applyIdMismatchStyle(td, colIdx, rIdx, idIssue);
+          applyFieldFlag(td, colIdx, rIdx, nameIssues);
+          const wasEdited = edits[rIdx] && Object.prototype.hasOwnProperty.call(edits[rIdx], colIdx);
+          if (wasEdited) td.classList.add('cell-edited');
+
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'cell-input';
+          const value = getEffectiveValue(rIdx, colIdx);
+          input.value = value;
+          if (colIdx === idIssue.idCol) {
+            input.classList.add('id-col-input');
+            input.size = Math.max(value.length, 6) + 1;
+            td.classList.add('id-col-cell');
+            input.addEventListener('focus', maybeShowIdWarning);
+          }
+          input.addEventListener('change', () => {
+            setEditedValue(rIdx, colIdx, input.value);
+            renderAll();
+          });
+          td.appendChild(input);
+
+          if (wasEdited) {
+            const origLine = document.createElement('div');
+            origLine.className = 'cell-original';
+            origLine.textContent = 'Ursprünglich: ' + (dataRows[rIdx][colIdx] ?? '(leer)');
+            td.appendChild(origLine);
+          }
+
+          const suggestion = getCellSuggestion(rIdx, colIdx, nameIssues);
+          if (suggestion && suggestion.suggestedValue && suggestion.suggestedValue !== value) {
+            const sugWrap = document.createElement('div');
+            sugWrap.className = 'cell-suggestion';
+            const sugText = document.createElement('span');
+            sugText.textContent = 'Vorschlag: ' + suggestion.suggestedValue;
+            sugWrap.appendChild(sugText);
+            const applyBtn = document.createElement('button');
+            applyBtn.type = 'button';
+            applyBtn.className = 'cell-suggestion-apply';
+            applyBtn.textContent = 'Übernehmen';
+            applyBtn.addEventListener('click', () => {
+              setEditedValue(rIdx, colIdx, suggestion.suggestedValue);
+              renderAll();
+            });
+            sugWrap.appendChild(applyBtn);
+            td.appendChild(sugWrap);
+          }
+
+          tr.appendChild(td);
+          });
+        }
+
+        const actionTd = document.createElement('td');
+        actionTd.className = 'row-action-cell';
+        const actionWrap = document.createElement('div');
+        actionWrap.className = 'row-actions-cell';
+
+        if (group.kind === 'pending') {
+          const confirmBtn = document.createElement('button');
+          confirmBtn.type = 'button';
+          confirmBtn.className = 'row-confirm-btn';
+          confirmBtn.title = 'Als geprüft bestätigen (verschiebt die Zeile zurück in die Haupttabelle)';
+          confirmBtn.setAttribute('aria-label', 'Als geprüft bestätigen');
+          confirmBtn.innerHTML = checkIconSvg();
+          confirmBtn.addEventListener('click', () => {
+            confirmedRows.add(rIdx);
+            renderAll();
+          });
+          actionWrap.appendChild(confirmBtn);
+        } else if (group.kind === 'delete') {
+          const confirmDeleteBtn = document.createElement('button');
+          confirmDeleteBtn.type = 'button';
+          confirmDeleteBtn.className = 'row-confirm-btn row-confirm-btn--danger';
+          confirmDeleteBtn.title = 'Löschung endgültig bestätigen';
+          confirmDeleteBtn.setAttribute('aria-label', 'Löschung endgültig bestätigen');
+          confirmDeleteBtn.innerHTML = checkIconSvg();
+          confirmDeleteBtn.addEventListener('click', () => {
+            showConfirmModal(
+              'Löschung endgültig bestätigen?',
+              rowRef(rIdx) + ' endgültig löschen? Dies kann nicht rückgängig gemacht werden.',
+              () => {
+                pendingDeleteRows.delete(rIdx);
+                deletedRows.add(rIdx);
+                renderAll();
+              }
+            );
+          });
+          actionWrap.appendChild(confirmDeleteBtn);
+
+          const undoBtn = document.createElement('button');
+          undoBtn.type = 'button';
+          undoBtn.className = 'row-reset-btn';
+          undoBtn.title = 'Löschung zurücknehmen';
+          undoBtn.setAttribute('aria-label', 'Löschung zurücknehmen');
+          undoBtn.innerHTML = resetIconSvg();
+          undoBtn.addEventListener('click', () => {
+            pendingDeleteRows.delete(rIdx);
+            renderAll();
+          });
+          actionWrap.appendChild(undoBtn);
+        } else {
+          const rowDeleteBtn = document.createElement('button');
+          rowDeleteBtn.type = 'button';
+          rowDeleteBtn.className = 'row-delete-btn';
+          rowDeleteBtn.title = 'Zeile zur Löschung vormerken';
+          rowDeleteBtn.setAttribute('aria-label', 'Zeile zur Löschung vormerken');
+          rowDeleteBtn.innerHTML = trashIconSvg();
+          rowDeleteBtn.addEventListener('click', () => {
+            showConfirmModal(
+              'Zeile zur Löschung vormerken?',
+              rowRef(rIdx) + ' zur Löschung vormerken? Sie erscheint rot durchgestrichen im Bestätigungsbereich und wird erst nach endgültiger Bestätigung dort entfernt.',
+              () => {
+                pendingDeleteRows.add(rIdx);
+                confirmedRows.delete(rIdx);
+                renderAll();
+              }
+            );
+          });
+          actionWrap.appendChild(rowDeleteBtn);
+        }
+
+        if (group.kind !== 'delete') {
+        const revertRowBtn = document.createElement('button');
+        revertRowBtn.type = 'button';
+        revertRowBtn.className = 'row-reset-btn';
+        revertRowBtn.title = 'Bearbeitungen dieser Zeile verwerfen (stellt die Originalwerte wieder her)';
+        revertRowBtn.setAttribute('aria-label', 'Bearbeitungen dieser Zeile verwerfen');
+        revertRowBtn.innerHTML = resetIconSvg();
+        if (!edits[rIdx]) revertRowBtn.disabled = true;
+        revertRowBtn.addEventListener('click', () => {
+          if (!edits[rIdx]) return; // nothing to reset
+          showConfirmModal(
+            'Zeile zurücksetzen?',
+            rowRef(rIdx) + ': alle Bearbeitungen verwerfen und die ursprünglichen Werte wiederherstellen?'
+          , () => {
+            delete edits[rIdx];
+            confirmedRows.delete(rIdx);
+            renderAll();
+          });
+        });
+        actionWrap.appendChild(revertRowBtn);
+        }
+
+        actionTd.appendChild(actionWrap);
+        tr.appendChild(actionTd);
+
+        dupBodyRows.appendChild(tr);
+      });
+    });
+
+    fitIdColumnFont(idIssue.idCol);
+  }
+
+  function checkIconSvg() {
+    return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M4 12l5 5L20 6"/></svg>';
+  }
+
+  function resetIconSvg() {
+    return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>';
+  }
+
+  function fitIdColumnFont(idCol) {
+    if (idCol === undefined) return;
+    const idInputs = Array.from(dupBodyRows.querySelectorAll('input.id-col-input'));
+    if (idInputs.length === 0) return;
+    const scrollEl = dupBodyRows.closest('.table-scroll');
+    if (!scrollEl) return;
+
+    const baseSize = 12.5;
+    const minSize = 10;
+    let size = baseSize;
+    idInputs.forEach(inp => { inp.style.fontSize = size + 'px'; });
+
+    let guard = 0;
+    while (scrollEl.scrollWidth > scrollEl.clientWidth + 1 && size > minSize && guard < 10) {
+      size -= 0.5;
+      idInputs.forEach(inp => { inp.style.fontSize = size + 'px'; });
+      guard++;
+    }
+  }
+
+  // ---------- Table (header = mapping UI, body = data) ----------
+
+  function exportableOrder() {
+    return order.filter(i => !hiddenCols.has(i) && mapping[i] !== NONE_VALUE);
+  }
+
+  function trashIconSvg() {
+    return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>';
+  }
+
+  function renderHiddenColsBar() {
+    hiddenColsBar.innerHTML = '';
+    if (hiddenCols.size === 0) { hiddenColsBar.style.display = 'none'; return; }
+    hiddenColsBar.style.display = 'flex';
+    Array.from(hiddenCols).sort((a, b) => a - b).forEach(colIdx => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'hidden-col-chip';
+      chip.title = 'Spalte wieder einblenden';
+      chip.innerHTML = '<span class="restore-icon">↺</span> ' + (headers[colIdx] || '(ohne Titel)');
+      chip.addEventListener('click', () => {
+        hiddenCols.delete(colIdx);
+        renderAll();
+      });
+      hiddenColsBar.appendChild(chip);
+    });
+  }
+
+  function renderTable() {
+    headRow.innerHTML = '';
+    bodyRows.innerHTML = '';
+    const used = usedTargets();
+    const { reviewGroups, pulledRowIndices, idIssue, nameIssues } = computeReviewGroups();
+    const visibleOrder = order.filter(i => !hiddenCols.has(i));
+    renderHiddenColsBar();
+    renderDuplicatesTable(reviewGroups, idIssue, nameIssues, visibleOrder);
+
+    const rownumTh = document.createElement('th');
+    rownumTh.className = 'rownum-th';
+    rownumTh.textContent = '#';
+    headRow.appendChild(rownumTh);
+
+    visibleOrder.forEach((colIdx, pos) => {
+      const th = document.createElement('th');
+      th.dataset.pos = pos;
+
+      const flex = document.createElement('div');
+      flex.className = 'th-flex';
+
+      // drag handle
+      const handle = document.createElement('div');
+      handle.className = 'col-drag-handle';
+      handle.title = 'Ziehen zum Verschieben';
+      handle.setAttribute('aria-label', 'Spalte ziehen zum Verschieben');
+      handle.textContent = '⠿';
+      handle.draggable = true;
+      handle.addEventListener('dragstart', (e) => {
+        dragFromPos = order.indexOf(colIdx);
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      handle.addEventListener('dragend', () => {
+        dragFromPos = null;
+        document.querySelectorAll('th.col-over').forEach(el => el.classList.remove('col-over'));
+      });
+      flex.appendChild(handle);
+
+      // content: select + original name
+      const content = document.createElement('div');
+      content.className = 'th-content';
+
+      const select = document.createElement('select');
+      select.className = 'col-select ' + (mapping[colIdx] ? 'mapped' : 'unmapped');
+      const optNone = document.createElement('option');
+      optNone.value = NONE_VALUE;
+      optNone.textContent = NONE_LABEL;
+      select.appendChild(optNone);
+      MAPPING_FIELDS.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f;
+        opt.textContent = f;
+        if (used.includes(f) && mapping[colIdx] !== f) opt.disabled = true;
+        select.appendChild(opt);
+      });
+      select.value = mapping[colIdx];
+      select.addEventListener('change', () => {
+        mapping[colIdx] = select.value;
+        renderAll();
+      });
+      content.appendChild(select);
+
+      const origName = document.createElement('div');
+      origName.className = 'col-orig';
+      origName.textContent = headers[colIdx] || '(ohne Titel)';
+      origName.title = headers[colIdx] || '(ohne Titel)';
+      content.appendChild(origName);
+
+      flex.appendChild(content);
+
+      // delete/hide button
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'col-delete-btn';
+      deleteBtn.title = 'Spalte ausblenden (nicht relevant)';
+      deleteBtn.setAttribute('aria-label', 'Spalte ausblenden');
+      deleteBtn.innerHTML = trashIconSvg();
+      deleteBtn.addEventListener('click', () => {
+        hiddenCols.add(colIdx);
+        mapping[colIdx] = NONE_VALUE;
+        renderAll();
+      });
+      flex.appendChild(deleteBtn);
+
+      th.appendChild(flex);
+
+      // drop target = whole th
+      th.addEventListener('dragover', (e) => {
+        if (dragFromPos === null) return;
+        e.preventDefault();
+        th.classList.add('col-over');
+      });
+      th.addEventListener('dragleave', () => th.classList.remove('col-over'));
+      th.addEventListener('drop', (e) => {
+        e.preventDefault();
+        th.classList.remove('col-over');
+        if (dragFromPos === null) return;
+        moveColumn(dragFromPos, order.indexOf(colIdx));
+        dragFromPos = null;
+      });
+
+      headRow.appendChild(th);
+    });
+
+    dataRows.forEach((row, rIdx) => {
+      if (pulledRowIndices.has(rIdx)) return; // pulled up into the review table
+      const tr = document.createElement('tr');
+      if (confirmedRows.has(rIdx)) tr.classList.add('was-fixed-row');
+      const rownumTd = document.createElement('td');
+      rownumTd.className = 'rownum-td';
+      rownumTd.textContent = csvLineNumber(rIdx);
+      tr.appendChild(rownumTd);
+      visibleOrder.forEach(colIdx => {
+        const td = document.createElement('td');
+        td.textContent = getEffectiveValue(rIdx, colIdx);
+        if (mapping[colIdx] === NONE_VALUE) {
+          td.classList.add('unmapped-cell');
+        } else if (MONO_FIELDS.includes(mapping[colIdx])) {
+          td.classList.add('mono');
+        }
+        applyIdMismatchStyle(td, colIdx, rIdx, idIssue);
+        tr.appendChild(td);
+      });
+      bodyRows.appendChild(tr);
+    });
+
+    if (dataRows.length > 0 && dataRows.length === pulledRowIndices.size) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = visibleOrder.length + 1;
+      td.className = 'empty-note';
+      td.textContent = 'Alle Zeilen liegen aktuell oben im Bereich „Manueller Abgleich nötig“.';
+      tr.appendChild(td);
+      bodyRows.appendChild(tr);
+    }
+  }
+
+  function moveColumn(fromPos, toPos) {
+    if (toPos < 0 || toPos >= order.length || fromPos === toPos) return;
+    const [moved] = order.splice(fromPos, 1);
+    order.splice(toPos, 0, moved);
+    renderAll();
+  }
+
+  // ---------- Automatic suggestion apply (opt-in, risky) ----------
+
+  function applyAllSuggestionsOnce() {
+    const { nameIssues } = computeReviewGroups();
+    const cols = [nameIssues.vornameCol, nameIssues.nameCol, nameIssues.benutzernameCol].filter(c => c !== undefined);
+    let changed = false;
+    dataRows.forEach((row, rIdx) => {
+      if (deletedRows.has(rIdx) || pendingDeleteRows.has(rIdx)) return;
+      cols.forEach(colIdx => {
+        const current = getEffectiveValue(rIdx, colIdx);
+        const suggestion = getCellSuggestion(rIdx, colIdx, nameIssues);
+        if (suggestion && suggestion.suggestedValue && suggestion.suggestedValue !== current) {
+          setEditedValue(rIdx, colIdx, suggestion.suggestedValue);
+          changed = true;
+        }
+      });
+    });
+    return changed;
+  }
+
+  function autoApplyAllSuggestionsIfEnabled() {
+    if (!optAutoApply.checked) return;
+    let iterations = 0;
+    while (applyAllSuggestionsOnce() && iterations < 6) iterations++;
+  }
+
+  function renderAll() {
+    autoApplyAllSuggestionsIfEnabled();
+    autoApplyBanner.style.display = optAutoApply.checked ? 'block' : 'none';
+    renderValidation();
+    renderTable();
+    renderChangelog();
+  }
+
+  // ---------- Export ----------
+
+  function csvEscape(value) {
+    const v = (value ?? '').toString();
+    if (v.includes(';') || v.includes('"') || v.includes('\n') || v.includes('\r')) {
+      return '"' + v.replace(/"/g, '""') + '"';
+    }
+    return v;
+  }
+
+  exportBtn.addEventListener('click', () => {
+    const cols = exportableOrder();
+    if (cols.length === 0) return;
+    const { pulledRowIndices } = computeReviewGroups();
+
+    const lines = [];
+    lines.push(cols.map(i => csvEscape(mapping[i])).join(';'));
+    dataRows.forEach((row, rIdx) => {
+      if (pulledRowIndices.has(rIdx)) return;
+      lines.push(cols.map(i => csvEscape(getEffectiveValue(rIdx, i))).join(';'));
+    });
+    const csvContent = lines.join('\r\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = currentFilename + '_export.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+</script>
+</body>
+</html>
