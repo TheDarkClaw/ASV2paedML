@@ -1957,7 +1957,7 @@
       });
     }
 
-    const KIND_RANK = { delete: -1, pending: 0, dup: 1, format: 1, prefix: 2, compound: 3, specialchars: 4, username: 5 };
+    const KIND_RANK = { delete: 6, pending: 7, dup: 1, format: 1, prefix: 2, compound: 3, specialchars: 4, username: 5 };
     reviewGroups.sort((a, b) => {
       const rankDiff = (KIND_RANK[a.kind] ?? 99) - (KIND_RANK[b.kind] ?? 99);
       return rankDiff !== 0 ? rankDiff : a.rowIndices[0] - b.rowIndices[0];
