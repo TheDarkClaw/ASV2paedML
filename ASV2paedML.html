@@ -646,6 +646,16 @@
     <h3>Prüfungen</h3>
     <div class="option-row">
       <label class="switch">
+        <input type="checkbox" id="optTeacherList">
+        <span class="slider"></span>
+      </label>
+      <label for="optTeacherList">
+        Lehrerliste (keine Klassenspalte)
+        <span class="option-sub">Macht „Klasse“ zu einem optionalen statt einem Pflichtfeld — für Listen ohne Klassenzuweisung.</span>
+      </label>
+    </div>
+    <div class="option-row" style="margin-top:8px">
+      <label class="switch">
         <input type="checkbox" id="optExterneId" checked>
         <span class="slider"></span>
       </label>
@@ -766,7 +776,7 @@
 
 <script>
   const MAPPING_FIELDS = ['Vorname', 'Name', 'Klasse', 'Externe ID', 'Kennwort', 'E-Mail-Adresse', 'Benutzername'];
-  const REQUIRED_ALWAYS = ['Vorname', 'Name', 'Klasse'];
+  const REQUIRED_ALWAYS = ['Vorname', 'Name'];
   const MONO_FIELDS = ['Externe ID', 'Kennwort'];
 
   // Bekannte alternative Spaltenüberschriften je Zielfeld (Vergleich erfolgt kleingeschrieben).
@@ -843,6 +853,7 @@
   const filenameEl = document.getElementById('filename');
   const rowCountEl = document.getElementById('rowCount');
   const changeFileBtn = document.getElementById('changeFileBtn');
+  const optTeacherList = document.getElementById('optTeacherList');
   const optExterneId = document.getElementById('optExterneId');
   const validationMsg = document.getElementById('validationMsg');
   const exportBtn = document.getElementById('exportBtn');
@@ -1710,6 +1721,7 @@
 
   function requiredFields() {
     const req = [...REQUIRED_ALWAYS];
+    if (!optTeacherList.checked) req.push('Klasse');
     if (optExterneId.checked) req.push('Externe ID');
     return req;
   }
@@ -1738,6 +1750,7 @@
     }
   }
 
+  optTeacherList.addEventListener('change', renderAll);
   optExterneId.addEventListener('change', renderAll);
   optCompoundNames.addEventListener('change', renderAll);
   optNamePrefix.addEventListener('change', renderAll);
