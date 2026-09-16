@@ -292,6 +292,10 @@
     width: 56px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px;
     font-size: 13px; text-align: center; font-family: var(--sans);
   }
+  .maxlen-row select{
+    padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px;
+    font-size: 13px; font-family: var(--sans); background: #fff;
+  }
 
   .csv-ext-list{ display: flex; flex-direction: column; gap: 5px; margin: 8px 0 10px; max-height: 140px; overflow-y: auto; }
   .csv-ext-item{
@@ -643,6 +647,18 @@
       <button class="ghost-btn" id="optionsCloseBtn">Schließen</button>
     </div>
 
+    <h3>Import</h3>
+    <div class="maxlen-row">
+      <label for="optFileEncoding">
+        Zeichenkodierung
+        <span class="maxlen-sub">Bei falsch dargestellten Umlauten/ß auf ANSI umstellen und Datei neu laden.</span>
+      </label>
+      <select id="optFileEncoding">
+        <option value="UTF-8">UTF-8</option>
+        <option value="windows-1252">ANSI (Windows-1252)</option>
+      </select>
+    </div>
+
     <h3>Prüfungen</h3>
     <div class="option-row">
       <label class="switch">
@@ -853,6 +869,7 @@
   const filenameEl = document.getElementById('filename');
   const rowCountEl = document.getElementById('rowCount');
   const changeFileBtn = document.getElementById('changeFileBtn');
+  const optFileEncoding = document.getElementById('optFileEncoding');
   const optTeacherList = document.getElementById('optTeacherList');
   const optExterneId = document.getElementById('optExterneId');
   const validationMsg = document.getElementById('validationMsg');
@@ -1270,7 +1287,7 @@
       status.className = 'error';
       status.textContent = 'Die Datei konnte nicht gelesen werden.';
     };
-    reader.readAsText(file, 'UTF-8');
+    reader.readAsText(file, optFileEncoding.value);
   }
 
   // Browser-Standardwarnung beim Verlassen der Seite (Neuladen, Schließen, ...),
