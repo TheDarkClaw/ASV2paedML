@@ -600,7 +600,7 @@
 
       <section class="panel">
         <h2>Spalten</h2>
-        <p class="panel-desc">Zielbezeichnung per Klick auf die Spaltenüberschrift wählen. Zum Verschieben am Griff (⠿) links in der Überschrift ziehen. Mit dem Mülleimer-Symbol rechts eine irrelevante Spalte ausblenden. Nicht zugeordnete Spalten werden beim Export weggelassen.</p>
+        <p class="panel-desc">Zielbezeichnung per Klick auf die Spaltenüberschrift wählen. Zum Verschieben am Griff (⠿) links in der Überschrift ziehen. Mit dem Mülleimer-Symbol rechts eine Spalte ausblenden — nur ausgeblendete Spalten fehlen im Export. Nicht zugeordnete Spalten werden mit ihrer ursprünglichen Überschrift mit exportiert.</p>
         <div class="hidden-cols-bar" id="hiddenColsBar"></div>
         <div class="table-shell">
           <div class="table-scroll">
@@ -1760,9 +1760,14 @@
       exportBtn.disabled = true;
     } else {
       validationMsg.className = 'ok';
-      const exportColCount = order.filter(i => !hiddenCols.has(i) && mapping[i] !== NONE_VALUE).length;
+      const exportCols = exportableOrder();
+      const unmappedExportCols = exportCols.filter(i => mapping[i] === NONE_VALUE).length;
+      let colsNote = exportCols.length + ' Spalten';
+      if (unmappedExportCols > 0) {
+        colsNote += ' (davon ' + unmappedExportCols + ' ohne Zuordnung, Original-Überschrift wird übernommen)';
+      }
       const exportRowCount = dataRows.length - pulledRowIndices.size;
-      validationMsg.textContent = 'Bereit zum Export — ' + exportRowCount + ' Zeile(n), ' + exportColCount + ' von ' + order.length + ' Spalten.' + dupNote;
+      validationMsg.textContent = 'Bereit zum Export — ' + exportRowCount + ' Zeile(n), ' + colsNote + '.' + dupNote;
       exportBtn.disabled = false;
     }
   }
@@ -2319,7 +2324,7 @@
   // ---------- Table (header = mapping UI, body = data) ----------
 
   function exportableOrder() {
-    return order.filter(i => !hiddenCols.has(i) && mapping[i] !== NONE_VALUE);
+    return order.filter(i => !hiddenCols.has(i));
   }
 
   function trashIconSvg() {
@@ -2539,7 +2544,7 @@
     const { pulledRowIndices } = computeReviewGroups();
 
     const lines = [];
-    lines.push(cols.map(i => csvEscape(mapping[i])).join(';'));
+    lines.push(cols.map(i => csvEscape(mapping[i] || headers[i])).join(';'));
     dataRows.forEach((row, rIdx) => {
       if (pulledRowIndices.has(rIdx)) return;
       lines.push(cols.map(i => csvEscape(getEffectiveValue(rIdx, i))).join(';'));
